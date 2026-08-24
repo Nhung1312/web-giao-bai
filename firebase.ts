@@ -25,12 +25,12 @@ import {
 } from 'firebase/firestore';
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyCJaQgSfMYC1RqLeCXWT_SJrQWlLs7PSkg",
-  authDomain: "onluyenpro-53b11.firebaseapp.com",
-  projectId: "onluyenpro-53b11",
-  storageBucket: "onluyenpro-53b11.firebasestorage.app",
-  messagingSenderId: "271702658864",
-  appId: "1:271702658864:web:3356c5212459347dc9c2f5"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase app safely
