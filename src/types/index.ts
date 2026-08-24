@@ -56,6 +56,12 @@ export interface Assignment {
   isPublished: boolean;
 }
 
+export interface ViolationEvent {
+  timestamp: string;
+  type: 'tab_switch' | 'window_blur' | 'fullscreen_exit' | 'context_menu' | 'copy_attempt';
+  description: string;
+}
+
 export interface StudentAnswer {
   questionId: string;
   selectedAnswer: string; // 'A', 'B', 'C', 'D' or text
@@ -82,6 +88,10 @@ export interface Submission {
   timeSpentSeconds: number; // Thời gian làm bài
   startedAt: string;
   submittedAt: string;
+  // Anti-cheat monitoring fields
+  tabSwitchCount?: number;
+  violationEvents?: ViolationEvent[];
+  isShuffled?: boolean;
 }
 
 export interface QuestionAnalysis {

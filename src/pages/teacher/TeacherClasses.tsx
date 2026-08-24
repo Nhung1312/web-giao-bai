@@ -251,7 +251,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
                 <div>
                   <div className="flex items-center space-x-2">
                     <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                      Khối {currentClass.grade}
+                      Lớp {currentClass.grade}
                     </span>
                     <h2 className="text-xl font-extrabold text-slate-900">
                       Lớp {currentClass.name}
@@ -383,16 +383,16 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
             </div>
             <form onSubmit={handleCreateClass} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Khối lớp</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Lớp</label>
                 <select
                   value={newClassGrade}
                   onChange={(e) => setNewClassGrade(e.target.value as GradeLevel)}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold"
                 >
-                  <option value="6">Khối 6</option>
-                  <option value="7">Khối 7</option>
-                  <option value="8">Khối 8</option>
-                  <option value="9">Khối 9</option>
+                  <option value="6">Lớp 6</option>
+                  <option value="7">Lớp 7</option>
+                  <option value="8">Lớp 8</option>
+                  <option value="9">Lớp 9</option>
                 </select>
               </div>
 

@@ -16,7 +16,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
 
   // Link bài tập
   const origin = window.location.origin;
-  const assignmentLink = `${origin}/#assignment=${assignment.assignmentCode}`;
+  const assignmentLink = `${origin}/join?code=${assignment.assignmentCode}`;
 
   useEffect(() => {
     if (isOpen && assignment.assignmentCode) {
@@ -84,7 +84,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
         <div className="p-6 text-center">
           <div className="mb-2">
             <span className="inline-block bg-blue-100 text-blue-800 font-semibold text-xs px-2.5 py-0.5 rounded-full mb-1">
-              Khối {assignment.grade} • Lớp {assignment.className || 'Toàn khối'}
+              Lớp {assignment.grade} • {assignment.className ? `Lớp ${assignment.className}` : 'Tất cả học sinh'}
             </span>
             <h4 className="font-bold text-slate-800 text-base line-clamp-1">{assignment.title}</h4>
           </div>

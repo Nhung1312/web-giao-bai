@@ -166,11 +166,11 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
                   <tr key={asg.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="font-bold text-slate-900">{asg.title}</div>
-                      <div className="text-xs text-slate-500">{asg.topic} • Khối {asg.grade}</div>
+                      <div className="text-xs text-slate-500">{asg.topic} • Lớp {asg.grade}</div>
                     </td>
                     <td className="py-3.5 px-3">
                       <span className="inline-block bg-blue-100 text-blue-800 font-bold text-xs px-2.5 py-0.5 rounded-md">
-                        {asg.className || 'Toàn khối'}
+                        {asg.className ? `Lớp ${asg.className}` : 'Tất cả học sinh'}
                       </span>
                     </td>
                     <td className="py-3.5 px-3 text-center font-semibold text-slate-700">

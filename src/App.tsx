@@ -1,52 +1,54 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { StorageService } from './services/storageService';
 import { Assignment, ClassRoom, Submission } from './types';
 import { Navbar } from './components/Navbar';
+import { StudentProgressBar } from './components/StudentProgressBar';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { QRCodeModal } from './components/QRCodeModal';
 import { HomePage } from './pages/HomePage';
+import { GradeAssignmentsPage } from './pages/GradeAssignmentsPage';
 import { TeacherLayout } from './pages/teacher/TeacherLayout';
 import { StudentJoinPage } from './pages/student/StudentJoinPage';
 import { StudentExamPage } from './pages/student/StudentExamPage';
 import { StudentResultPage } from './pages/student/StudentResultPage';
+import { useLearningProgressStore } from './store/useLearningProgressStore';
 
-export default function App() {
-  // App view state
-  const [currentRole, setCurrentRole] = useState<'home' | 'teacher' | 'student'>('home');
-  const [studentExamState, setStudentExamState] = useState<{
-    status: 'join' | 'taking' | 'result';
-    activeAssignment?: Assignment;
-    studentName?: string;
-    classId?: string;
-    className?: string;
-    submission?: Submission;
-    initialCode?: string;
-  }>({ status: 'join' });
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Persistent storage state
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
 
+  // Student exam taking flow state
+  const [examSession, setExamSession] = useState<{
+    assignment?: Assignment;
+    studentName?: string;
+    classId?: string;
+    className?: string;
+    submission?: Submission;
+  }>({});
+
   // Share modal state
   const [shareAssignment, setShareAssignment] = useState<Assignment | null>(null);
 
-  // Initialize data on mount
+  // Initialize and load data on mount
   useEffect(() => {
     StorageService.initDemoData();
     refreshAllData();
 
-    // Check URL Hash for direct assignment join: #assignment=TOAN6A1-8K4P
+    // Check URL Hash for legacy/direct assignment join e.g. #assignment=TOAN6A1-8K4P
     const handleHashChange = () => {
       const hash = window.location.hash;
       if (hash.includes('assignment=')) {
         const codeMatch = hash.match(/assignment=([^&]+)/);
         if (codeMatch && codeMatch[1]) {
           const code = decodeURIComponent(codeMatch[1]).trim().toUpperCase();
-          setCurrentRole('student');
-          setStudentExamState({
-            status: 'join',
-            initialCode: code
-          });
+          navigate(`/join?code=${code}`);
         }
       }
     };
@@ -63,26 +65,11 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    if (window.confirm('Khôi phục toàn bộ dữ liệu về trạng thái mẫu ban đầu? (Lớp 6A1, 20 câu phân số, bài nộp thử nghiệm)')) {
+    if (window.confirm('Khôi phục toàn bộ dữ liệu về trạng thái mẫu ban đầu cho Lớp 6, 7, 8, 9?')) {
       StorageService.resetAllData();
       refreshAllData();
       alert('Đã khôi phục dữ liệu mẫu thành công!');
     }
-  };
-
-  const handleSelectRole = (role: 'home' | 'teacher' | 'student') => {
-    setCurrentRole(role);
-    if (role === 'student') {
-      setStudentExamState(prev => ({ ...prev, status: 'join' }));
-    }
-  };
-
-  const handleEnterCodeFromHome = (code: string) => {
-    setCurrentRole('student');
-    setStudentExamState({
-      status: 'join',
-      initialCode: code
-    });
   };
 
   const handleStartExam = (
@@ -91,112 +78,159 @@ export default function App() {
     classId: string,
     className: string
   ) => {
-    setStudentExamState({
-      status: 'taking',
-      activeAssignment: assignment,
+    setExamSession({
+      assignment,
       studentName,
       classId,
       className
     });
+    // Update student name in zustand store
+    if (studentName && studentName !== 'Học sinh') {
+      useLearningProgressStore.getState().setStudentName(studentName);
+    }
+    navigate('/exam');
   };
 
   const handleFinishExam = (submission: Submission) => {
     refreshAllData();
-    setStudentExamState(prev => ({
+    if (examSession.assignment) {
+      // Record progress into Zustand persistent store
+      useLearningProgressStore.getState().recordSubmission(submission, examSession.assignment);
+    }
+    setExamSession(prev => ({
       ...prev,
-      status: 'result',
       submission
     }));
+    navigate('/result');
   };
 
   const handleRetakeExam = () => {
-    if (studentExamState.activeAssignment && studentExamState.studentName) {
-      setStudentExamState(prev => ({
-        ...prev,
-        status: 'taking'
-      }));
+    if (examSession.assignment && examSession.studentName) {
+      navigate('/exam');
     } else {
-      setStudentExamState({ status: 'join' });
+      navigate('/join');
     }
   };
 
   const handleTestAssignmentFromTeacher = (assignment: Assignment) => {
-    setCurrentRole('student');
-    setStudentExamState({
-      status: 'taking',
-      activeAssignment: assignment,
-      studentName: 'Giáo viên (Chế độ làm thử)',
+    setExamSession({
+      assignment,
+      studentName: 'Giáo viên (Làm thử)',
       classId: assignment.classId,
-      className: assignment.className || 'Toàn khối'
+      className: assignment.className || 'Tất cả học sinh'
     });
+    navigate('/exam');
   };
 
+  // Check if we are inside an ongoing active exam (to hide progress bar during test for distraction-free)
+  const isTakingExam = location.pathname === '/exam';
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {/* Top Navbar */}
-      <Navbar
-        currentRole={currentRole}
-        onSelectRole={handleSelectRole}
-        onResetData={handleResetData}
-      />
+      <Navbar onResetData={handleResetData} />
 
-      {/* Main View Router */}
-      <div className="flex-1">
-        {currentRole === 'home' && (
-          <HomePage
-            assignments={assignments}
-            onSelectRole={handleSelectRole}
-            onEnterCode={handleEnterCodeFromHome}
+      {/* Top Zustand Learning Progress Bar (Sticky / Header Status Bar) */}
+      {!isTakingExam && (
+        <StudentProgressBar assignments={assignments} />
+      )}
+
+      {/* Main Page Routing */}
+      <main className="flex-1 pb-20 md:pb-6">
+        <Routes>
+          {/* Home Page with 4 Grade Cards */}
+          <Route 
+            path="/" 
+            element={<HomePage assignments={assignments} />} 
           />
-        )}
 
-        {currentRole === 'teacher' && (
-          <TeacherLayout
-            classes={classes}
-            assignments={assignments}
-            submissions={submissions}
-            onRefreshData={refreshAllData}
-            onOpenShare={(asg) => setShareAssignment(asg)}
-            onTestAssignment={handleTestAssignmentFromTeacher}
-            onResetData={handleResetData}
+          {/* Specific Grade Assignments Page */}
+          <Route
+            path="/grade/:gradeId"
+            element={
+              <GradeAssignmentsPage
+                assignments={assignments}
+                classes={classes}
+                onRefresh={refreshAllData}
+                onTestAssignment={handleTestAssignmentFromTeacher}
+              />
+            }
           />
-        )}
 
-        {currentRole === 'student' && (
-          <div>
-            {studentExamState.status === 'join' && (
-              <StudentJoinPage
-                initialCode={studentExamState.initialCode}
-                onStartExam={handleStartExam}
-              />
-            )}
+          {/* Student Join / Enter Code Page */}
+          <Route
+            path="/join"
+            element={<StudentJoinPage onStartExam={handleStartExam} />}
+          />
 
-            {studentExamState.status === 'taking' && studentExamState.activeAssignment && (
-              <StudentExamPage
-                assignment={studentExamState.activeAssignment}
-                studentName={studentExamState.studentName || 'Học sinh'}
-                classId={studentExamState.classId || 'other'}
-                className={studentExamState.className || 'Tự do'}
-                onFinishExam={handleFinishExam}
-              />
-            )}
+          {/* Student Active Exam Page */}
+          <Route
+            path="/exam"
+            element={
+              examSession.assignment ? (
+                <StudentExamPage
+                  assignment={examSession.assignment}
+                  studentName={examSession.studentName || 'Học sinh'}
+                  classId={examSession.classId || 'other'}
+                  className={examSession.className || 'Tự do'}
+                  onFinishExam={handleFinishExam}
+                />
+              ) : (
+                <Navigate to="/join" replace />
+              )
+            }
+          />
 
-            {studentExamState.status === 'result' &&
-              studentExamState.submission &&
-              studentExamState.activeAssignment && (
+          {/* Student Result & Review Page */}
+          <Route
+            path="/result"
+            element={
+              examSession.submission && examSession.assignment ? (
                 <StudentResultPage
-                  submission={studentExamState.submission}
-                  assignment={studentExamState.activeAssignment}
+                  submission={examSession.submission}
+                  assignment={examSession.assignment}
                   onRetake={handleRetakeExam}
                   onGoHome={() => {
-                    setCurrentRole('home');
-                    setStudentExamState({ status: 'join' });
+                    setExamSession({});
+                    navigate('/');
                   }}
                 />
-              )}
-          </div>
-        )}
-      </div>
+              ) : (
+                <Navigate to="/join" replace />
+              )
+            }
+          />
+
+          {/* Teacher Portal */}
+          <Route
+            path="/teacher/*"
+            element={
+              <TeacherLayout
+                classes={classes}
+                assignments={assignments}
+                submissions={submissions}
+                onRefreshData={refreshAllData}
+                onOpenShare={(asg) => setShareAssignment(asg)}
+                onTestAssignment={handleTestAssignmentFromTeacher}
+                onResetData={handleResetData}
+              />
+            }
+          />
+
+          {/* Catch-all redirect to Home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+
+      {/* PWA Add to Home Screen Prompt Banner */}
+      <PWAInstallBanner />
+
+      {/* Mobile Native-Style Bottom Navigation Bar (Hidden during active test for focus) */}
+      {!isTakingExam && (
+        <MobileBottomNav 
+          onOpenProgress={() => useLearningProgressStore.getState().setProgressModalOpen(true)} 
+        />
+      )}
 
       {/* QR Code & Share Modal */}
       {shareAssignment && (
@@ -207,5 +241,13 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   );
 }

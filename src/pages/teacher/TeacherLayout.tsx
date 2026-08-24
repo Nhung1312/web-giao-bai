@@ -53,9 +53,9 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
   ];
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50">
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-950 transition-colors">
       {/* Subnav Navigation Bar for Teacher */}
-      <div className="bg-white border-b border-slate-200 sticky top-16 z-20 shadow-xs">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-16 z-20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto py-2.5 no-scrollbar">
             {navItems.map((item) => {
@@ -66,12 +66,12 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
                 <button
                   key={item.id}
                   onClick={() => handleNavigate(item.id)}
-                  className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                  className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                     isActive
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : item.highlight
-                      ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -79,7 +79,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
                   {item.badge !== undefined && (
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
                       }`}
                     >
                       {item.badge}
@@ -123,6 +123,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         {activeTab === 'create' && (
           <TeacherCreateAssignment
             classes={classes}
+            initialQuestions={tabParams.initialQuestions}
+            initialTitle={tabParams.initialTitle}
             onSaveSuccess={(savedAssignment) => {
               onRefreshData();
               onOpenShare(savedAssignment);

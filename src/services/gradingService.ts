@@ -3,7 +3,7 @@
  * Cung cấp giải thuật tự động chấm điểm, tính phân tích phổ điểm, tỷ lệ đúng/sai từng câu.
  */
 
-import { Assignment, Submission, StudentAnswer, AssignmentStats, QuestionAnalysis } from '../types';
+import { Assignment, Submission, StudentAnswer, AssignmentStats, QuestionAnalysis, ViolationEvent } from '../types';
 
 export class GradingService {
   /**
@@ -18,8 +18,23 @@ export class GradingService {
     className: string;
     startedAt: string;
     submittedAt: string;
+    tabSwitchCount?: number;
+    violationEvents?: ViolationEvent[];
+    isShuffled?: boolean;
   }): Submission {
-    const { assignment, studentAnswers, studentName, studentId, classId, className, startedAt, submittedAt } = params;
+    const { 
+      assignment, 
+      studentAnswers, 
+      studentName, 
+      studentId, 
+      classId, 
+      className, 
+      startedAt, 
+      submittedAt,
+      tabSwitchCount = 0,
+      violationEvents = [],
+      isShuffled = false
+    } = params;
 
     let earnedPointsTotal = 0;
     let maxPointsTotal = 0;
@@ -78,7 +93,10 @@ export class GradingService {
       totalQuestions: assignment.questions.length,
       timeSpentSeconds,
       startedAt,
-      submittedAt
+      submittedAt,
+      tabSwitchCount,
+      violationEvents,
+      isShuffled
     };
   }
 

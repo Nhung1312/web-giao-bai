@@ -171,7 +171,44 @@ export class MockAIService implements IAIService {
     const optObj = params.options.find(o => o.id === params.studentAnswer);
     const correctObj = params.options.find(o => o.id === params.correctAnswer);
     
-    return `📌 **Phân tích chi tiết:**\n- Bạn đã chọn phương án **${params.studentAnswer}** (${optObj ? optObj.text : ''}).\n- Đáp án chính xác là **${params.correctAnswer}** (${correctObj ? correctObj.text : ''}).\n- **Phương pháp giải**: Áp dụng quy tắc biến đổi và tính toán từng bước theo chuẩn chương trình Toán THCS.`;
+    const qLower = params.questionText.toLowerCase();
+    let specificAdvice = '';
+
+    if (qLower.includes('hữu tỉ') || qLower.includes('tập hợp')) {
+      specificAdvice = `
+📌 **Kiến thức cốt lõi:**
+• Số hữu tỉ là số viết được dưới dạng phân số $a/b$ với $a, b \\in \\mathbb{Z}$ và $b \\neq 0$.
+• Kí hiệu: $\\mathbb{Q}$.
+• Chú ý: Phân số có mẫu số bằng 0 (như $-9/0$) không xác định nên KHÔNG phải là số hữu tỉ!`;
+    } else if (qLower.includes('căn bậc hai') || qLower.includes('√')) {
+      specificAdvice = `
+📌 **Kiến thức cốt lõi:**
+• Căn bậc hai số học của số $a \\geq 0$ là số $x \\geq 0$ sao cho $x^2 = a$ (kí hiệu $\\sqrt{a} = x$).
+• Với mọi số $a$, ta luôn có: $\\sqrt{a^2} = |a|$. Nếu $a \\geq 0$ thì $\\sqrt{a^2} = a$.`;
+    } else if (qLower.includes('thập phân') || qLower.includes('tuần hoàn')) {
+      specificAdvice = `
+📌 **Kiến thức cốt lõi:**
+• Phân số tối giản với mẫu dương, không có ước nguyên tố khác 2 và 5 thì viết được dưới dạng số thập phân hữu hạn.
+• Nếu mẫu có ước nguyên tố khác 2 và 5 (như 3, 7, 11...) thì viết được dưới dạng số thập phân vô hạn tuần hoàn.
+• Đổi số $0,(ab) = \\frac{ab}{99}$; $0,a(b) = \\frac{ab - a}{90}$.`;
+    } else if (qLower.includes('đối đỉnh') || qLower.includes('góc')) {
+      specificAdvice = `
+📌 **Kiến thức cốt lõi:**
+• Hai góc đối đỉnh là hai góc mà mỗi cạnh của góc này là tia đối của một cạnh của góc kia.
+• Hai góc đối đỉnh thì luôn bằng nhau: $\\widehat{xOy} = \\widehat{x'Oy'}$.`;
+    } else {
+      specificAdvice = `
+📌 **Phương pháp tư duy:**
+• Bước 1: Xác định rõ yêu cầu bài toán và các đại lượng đã cho.
+• Bước 2: Nhắc lại công thức, định lý Toán học liên quan.
+• Bước 3: Thực hiện tính toán cẩn thận từng bước và so sánh với 4 phương án.`;
+    }
+
+    return `💡 **Gia Sư AI Hướng Dẫn Từng Bước:**
+1. **Lỗi sai thường gặp**: Em đã chọn đáp án **${params.studentAnswer}** (${optObj ? optObj.text : ''}). Lựa chọn này chưa chính xác vì có thể bị nhầm lẫn dấu, quên điều kiện mẫu khác 0 hoặc thứ tự ưu tiên các phép tính.
+2. **Đáp án chuẩn**: **${params.correctAnswer}** (${correctObj ? correctObj.text : ''}).
+${specificAdvice}
+3. **Mẹo ghi nhớ nhanh**: Đọc kỹ đề bài, kiểm tra điều kiện xác định trước khi tính toán.`;
   }
 
   async generateSimilarQuestions(baseQuestion: Question, count: number): Promise<Question[]> {
