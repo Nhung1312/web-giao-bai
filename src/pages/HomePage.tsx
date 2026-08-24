@@ -99,24 +99,21 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
           </div>
 
           {/* 2 Big Action Portals side-by-side (Teacher & Student) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left pt-1">
             {/* Teacher Card */}
             <Link
               to="/teacher"
-              className="group p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-indigo-50/40 dark:hover:bg-slate-800/80 border border-indigo-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3 active:scale-[0.99]"
+              className="group p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-indigo-50/40 dark:hover:bg-slate-800/80 border border-indigo-200/90 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5 active:scale-[0.99]"
             >
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
                 <User className="w-5 h-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">
-                  Dành cho Thầy/Cô
-                </div>
                 <h3 className="text-sm font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-between">
                   <span>👨‍🏫 GIÁO VIÊN</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
                   Tạo đề, xuất file PDF, quản lý lớp & bảng điểm
                 </p>
               </div>
@@ -125,20 +122,17 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
             {/* Student Card */}
             <Link
               to="/join"
-              className="group p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-emerald-50/40 dark:hover:bg-slate-800/80 border border-emerald-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3 active:scale-[0.99]"
+              className="group p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-emerald-50/40 dark:hover:bg-slate-800/80 border border-emerald-200/90 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5 active:scale-[0.99]"
             >
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
                 <GraduationCap className="w-5 h-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">
-                  Dành cho các em
-                </div>
                 <h3 className="text-sm font-black text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors flex items-center justify-between">
                   <span>👨‍🎓 HỌC SINH</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
                   Vào phòng thi, tự luyện tập & nhận lời giải
                 </p>
               </div>
@@ -172,25 +166,19 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
                   className={`bg-white dark:bg-slate-900 rounded-2xl p-3 sm:p-3.5 border ${meta.colorScheme.border} ${meta.colorScheme.hoverBorder} shadow-2xs hover:shadow-md transition-all cursor-pointer text-left flex items-center justify-between group active:scale-[0.99]`}
                 >
                   <div className="min-w-0 flex-1 pr-3">
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${meta.colorScheme.badgeBg} ${meta.colorScheme.badgeText}`}>
+                    <div className="flex items-center space-x-2.5">
+                      <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-lg ${meta.colorScheme.badgeBg} ${meta.colorScheme.badgeText} shadow-2xs`}>
                         {meta.badge}
                       </span>
-                      <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                        {meta.title}
-                      </h3>
-                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 hidden sm:inline">
-                        • {count} đề
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <span>📚</span>
+                        <span>{count} đề luyện tập</span>
                       </span>
                     </div>
-
-                    <p className={`text-xs font-semibold mt-1 ${meta.colorScheme.accentText} truncate`}>
-                      {meta.subtitle}
-                    </p>
                   </div>
 
                   {/* Clean Action Button */}
-                  <div className={`px-3 py-1.5 rounded-xl ${meta.colorScheme.btnBg} font-bold text-xs flex items-center space-x-1 shadow-2xs shrink-0 group-hover:shadow-xs transition-all`}>
+                  <div className={`px-3.5 py-1.5 rounded-xl ${meta.colorScheme.btnBg} font-bold text-xs flex items-center space-x-1 shadow-2xs shrink-0 group-hover:shadow-xs transition-all`}>
                     <span>Vào học</span>
                     <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
