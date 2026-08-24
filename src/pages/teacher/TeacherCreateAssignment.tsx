@@ -4,6 +4,7 @@ import { Assignment, ClassRoom, GradeLevel, Question, QuestionOption } from '../
 import { StorageService } from '../../services/storageService';
 import { aiService } from '../../services/aiService';
 import { FileUploadModal } from '../../components/FileUploadModal';
+import { MathDisplay } from '../../components/MathDisplay';
 import { 
   Plus, 
   Trash2, 
@@ -484,17 +485,32 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
 
                 {/* Question Text */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nội dung câu hỏi *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Nội dung câu hỏi *
+                    </label>
+                    <span className="text-[11px] text-indigo-600 font-semibold">
+                      {'Hỗ trợ LaTeX: $...$ (inline) hoặc $$...$$ (block), phân số 2/5, căn √25, góc \\widehat{ABC}'}
+                    </span>
+                  </div>
                   <textarea
                     rows={2}
                     value={q.question}
                     onChange={(e) => handleUpdateQuestion(qIdx, { question: e.target.value })}
-                    placeholder="Nhập đề bài Toán. Ví dụ: Rút gọn phân số 18/24 về phân số tối giản..."
+                    placeholder="Nhập đề bài Toán. Ví dụ: Tính giá trị biểu thức $\frac{2}{5} + \frac{3}{5}$ hoặc $\sqrt{2x-6}$..."
                     className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500"
                     required
                   />
+
+                  {/* Live Render Preview */}
+                  {q.question.trim() && (
+                    <div className="mt-2 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-sm">
+                      <div className="text-[10px] uppercase font-black tracking-wider text-indigo-700 mb-1">
+                        Xem trước hiển thị chuẩn KaTeX:
+                      </div>
+                      <MathDisplay text={q.question} />
+                    </div>
+                  )}
                 </div>
 
                 {/* 4 Options Grid */}

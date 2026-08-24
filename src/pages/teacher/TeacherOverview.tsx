@@ -35,33 +35,52 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-white/5 rounded-full blur-2xl pointer-events-none" />
+      {/* Welcome Banner - Modern Minimalist Clean UI */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 text-slate-900 dark:text-white shadow-sm hover:shadow-md border border-slate-200/90 dark:border-slate-800 relative overflow-hidden transition-all">
+        {/* Subtle geometric background glow & accents */}
+        <div className="absolute right-0 top-0 w-80 h-80 bg-gradient-to-br from-blue-100/60 to-indigo-100/40 dark:from-indigo-950/40 dark:to-blue-950/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+        
+        {/* Geometric Accent Icon in Top Right */}
+        <div className="hidden md:flex absolute right-8 top-1/2 -translate-y-1/2 w-28 h-28 rounded-3xl bg-gradient-to-br from-indigo-50 to-blue-50/60 dark:from-slate-800/80 dark:to-slate-800/40 border border-indigo-100/80 dark:border-slate-700/60 items-center justify-center shadow-xs pointer-events-none rotate-3">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-600/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 -rotate-3">
+            <BookOpen className="w-8 h-8 stroke-[2.2]" />
+          </div>
+        </div>
+
         <div className="relative z-10 max-w-2xl">
-          <span className="inline-block bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full mb-3 uppercase tracking-wider">
-            Khu vực Quản trị Giáo viên
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Chào mừng Thầy/Cô đến với TOÁN THCS
+          {/* Refined Badge */}
+          <div className="inline-flex items-center space-x-1.5 bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 text-[11px] font-bold px-3 py-1 rounded-full mb-3 shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Khu vực Quản trị Giáo viên</span>
+          </div>
+
+          {/* Main Heading without slash */}
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
+            Chào mừng Thầy Cô đến với TOÁN THCS
           </h1>
-          <p className="text-blue-100 text-sm sm:text-base mt-2 leading-relaxed">
+          
+          {/* Subtitle */}
+          <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed font-medium">
             Hệ thống tạo đề, giao bài tập tự động bằng mã QR và phân tích chi tiết kết quả học tập của từng lớp.
           </p>
 
+          {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 mt-6">
+            {/* Primary Action Button */}
             <button
               onClick={() => onNavigate('create')}
-              className="inline-flex items-center space-x-2 bg-white text-indigo-700 hover:bg-blue-50 font-bold px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 text-sm"
+              className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-4 sm:px-5 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all active:scale-95 text-xs sm:text-sm cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>+ Tạo bài tập mới</span>
+              <span>Tạo bài tập mới</span>
             </button>
+
+            {/* Secondary Outline Action Button */}
             <button
               onClick={() => onNavigate('classes')}
-              className="inline-flex items-center space-x-2 bg-indigo-600/80 hover:bg-indigo-600 text-white font-semibold px-4 py-2.5 rounded-xl border border-indigo-400/40 transition-all text-sm"
+              className="inline-flex items-center space-x-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold px-4 sm:px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs transition-all active:scale-95 text-xs sm:text-sm cursor-pointer"
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span>Quản lý lớp học</span>
             </button>
           </div>

@@ -22,21 +22,57 @@
   scrollbar-width: none;  /* Firefox */
 }
 
-/* Dark mode math / KaTeX adjustments for high readability */
-.dark .katex {
-  color: #f1f5f9 !important;
-}
-
-.dark .katex-display {
-  color: #f8fafc !important;
-}
-
-/* Ensure math rendered inside colored badges remains readable */
-.dark .text-emerald-700 .katex,
-.dark .text-indigo-700 .katex,
-.dark .text-rose-700 .katex,
-.dark .text-amber-700 .katex {
+/* KaTeX Mathematics Styling & Color Inheritance */
+.katex {
+  font-size: 1.08em;
+  text-rendering: auto;
   color: inherit !important;
+}
+
+.katex .katex-html {
+  color: inherit !important;
+}
+
+.katex * {
+  color: inherit;
+}
+
+/* Ensure fractions, square root bars, and accents use the text's currentColor */
+.katex .frac-line,
+.katex .overline .overline-line,
+.katex .underline .underline-line {
+  border-bottom-color: currentColor !important;
+  border-top-color: currentColor !important;
+}
+
+.katex .sqrt > .sqrt-line {
+  border-top-color: currentColor !important;
+}
+
+.katex svg {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* KaTeX responsive scrolling on mobile */
+.katex-display {
+  color: inherit !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+  max-width: 100%;
+}
+
+.katex-block-wrapper {
+  color: inherit !important;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.math-display-container,
+.inline-math-container {
+  color: inherit;
 }
 
 /* Print specific styles to always print in crisp black and white paper format */
