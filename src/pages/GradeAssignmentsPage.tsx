@@ -107,61 +107,53 @@ export const GradeAssignmentsPage: React.FC<GradeAssignmentsPageProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 sm:py-5 space-y-3.5 sm:space-y-4 animate-in fade-in duration-150">
+      {/* Top Bar: Clean Breadcrumb & Quick Actions */}
+      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
         <Link 
           to="/"
-          className="inline-flex items-center space-x-1.5 font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+          className="inline-flex items-center space-x-1 font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Về Trang chủ</span>
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Trang chủ</span>
+          <span className="text-slate-400">/</span>
+          <span className="text-slate-900 dark:text-white font-black">Lớp {validGrade}</span>
         </Link>
 
-        {/* Quick Switch to other grades */}
-        <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-          {(['6', '7', '8', '9'] as GradeLevel[]).map((g) => (
-            <button
-              key={g}
-              onClick={() => navigate(`/grade/${g}`)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                validGrade === g
-                  ? 'bg-white dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Lớp {g}
-            </button>
-          ))}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => navigate(`/teacher/create?grade=${validGrade}`)}
+            className="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 rounded-lg transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Tạo đề mới</span>
+          </button>
         </div>
       </div>
 
-      {/* Grade Hero Banner */}
-      <div className={`p-6 sm:p-8 rounded-3xl border ${gradeMeta.colorScheme.border} ${gradeMeta.colorScheme.lightBg} shadow-xs relative overflow-hidden`}>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`text-xs font-black uppercase px-3 py-1 rounded-full ${gradeMeta.colorScheme.badgeBg} ${gradeMeta.colorScheme.badgeText}`}>
+      {/* Grade Hero Banner - Compact & Elevated */}
+      <div className={`p-4 sm:p-5 rounded-2xl border ${gradeMeta.colorScheme.border} ${gradeMeta.colorScheme.lightBg} shadow-2xs relative overflow-hidden`}>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${gradeMeta.colorScheme.badgeBg} ${gradeMeta.colorScheme.badgeText}`}>
                 {gradeMeta.badge}
               </span>
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Chương trình Toán THCS 2018
-              </span>
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                {gradeMeta.title} – {gradeMeta.subtitle}
+              </h1>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              {gradeMeta.title} – {gradeMeta.subtitle}
-            </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
+            <p className="text-xs text-slate-600 dark:text-slate-300 max-w-3xl leading-relaxed">
               {gradeMeta.description}
             </p>
 
             {/* Quick Topic Chips */}
-            <div className="pt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Chủ đề chính:</span>
+            <div className="pt-1 flex flex-wrap items-center gap-1 text-[11px]">
+              <span className="text-slate-400 font-medium mr-1">Chủ đề:</span>
               {gradeMeta.sampleTopics.map((topic, idx) => (
                 <span
                   key={idx}
-                  className="px-2.5 py-0.5 rounded-md bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 shadow-2xs"
+                  className="px-2 py-0.5 rounded-md bg-white/70 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-medium"
                 >
                   {topic}
                 </span>
@@ -169,68 +161,83 @@ export const GradeAssignmentsPage: React.FC<GradeAssignmentsPageProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            <button
-              onClick={() => navigate(`/teacher/create?grade=${validGrade}`)}
-              className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-xs text-xs sm:text-sm transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Thêm đề Lớp {validGrade}</span>
-            </button>
+          <div className="flex items-center gap-2 shrink-0 pt-1 md:pt-0">
             <button
               onClick={() => navigate('/join')}
-              className={`inline-flex items-center justify-center space-x-2 px-5 py-2.5 ${gradeMeta.colorScheme.btnBg} font-bold rounded-xl shadow-md text-xs sm:text-sm transition-all cursor-pointer active:scale-95`}
+              className={`inline-flex items-center justify-center space-x-1.5 px-4 py-2 ${gradeMeta.colorScheme.btnBg} font-bold rounded-xl shadow-xs text-xs transition-all cursor-pointer active:scale-95`}
             >
-              <GraduationCap className="w-4 h-4" />
+              <GraduationCap className="w-3.5 h-3.5" />
               <span>Vào phòng thi tự do</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+      {/* Streamlined Search & Filter Controls (Single Clean Strip) */}
+      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl p-2.5 sm:p-3 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-2.5">
+        {/* Main Controls Row */}
+        <div className="flex flex-col sm:flex-row items-center gap-2">
           {/* Search Box */}
-          <div className="relative sm:col-span-6 lg:col-span-6">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="relative flex-1 w-full">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Tìm bài kiểm tra Lớp ${validGrade}, mã bài, chủ đề...`}
-              className="w-full pl-9 pr-9 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-8 pr-8 py-2 bg-slate-50 dark:bg-slate-800/80 border-0 ring-1 ring-slate-200/80 dark:ring-slate-700/80 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Topic Filter */}
-          <div className="sm:col-span-4 lg:col-span-4">
-            <select
-              value={filterTopicCategory}
-              onChange={(e) => setFilterTopicCategory(e.target.value)}
-              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value="all">📐 Tất cả phân môn Lớp {validGrade}</option>
-              <option value="algebra">🔢 Đại số & Số học</option>
-              <option value="geometry">📐 Hình học & Đo lường</option>
-              <option value="statistics">📊 Thống kê & Xác suất</option>
-            </select>
-          </div>
+          {/* Filter Pills & Sort */}
+          <div className="flex items-center space-x-1.5 w-full sm:w-auto shrink-0 justify-between sm:justify-end">
+            {/* Quick Topic Filter Tabs */}
+            <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
+              <button
+                onClick={() => setFilterTopicCategory('all')}
+                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                  filterTopicCategory === 'all'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Tất cả ({gradeAssignments.length})
+              </button>
+              <button
+                onClick={() => setFilterTopicCategory('algebra')}
+                className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                  filterTopicCategory === 'algebra'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Đại số
+              </button>
+              <button
+                onClick={() => setFilterTopicCategory('geometry')}
+                className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                  filterTopicCategory === 'geometry'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Hình học
+              </button>
+            </div>
 
-          {/* Sort By */}
-          <div className="sm:col-span-2 lg:col-span-2">
+            {/* Sort By Dropdown */}
             <select
               value={sortBy}
               onChange={(e: any) => setSortBy(e.target.value)}
-              className="w-full px-2.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800/80 border-0 ring-1 ring-slate-200/80 dark:ring-slate-700/80 rounded-xl text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="newest">Mới nhất</option>
               <option value="oldest">Cũ nhất</option>
@@ -238,41 +245,6 @@ export const GradeAssignmentsPage: React.FC<GradeAssignmentsPageProps> = ({
               <option value="questions">Số câu</option>
               <option value="duration">Thời gian</option>
             </select>
-          </div>
-        </div>
-
-        {/* Quick Filter Pills */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Lọc theo phân môn:</span>
-            
-            <button
-              onClick={() => setFilterTopicCategory(filterTopicCategory === 'algebra' ? 'all' : 'algebra')}
-              className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                filterTopicCategory === 'algebra'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              <Calculator className="w-3 h-3" />
-              <span>Đại số ({gradeAssignments.filter(a => matchesTopicCategory(a.topic, 'algebra')).length})</span>
-            </button>
-
-            <button
-              onClick={() => setFilterTopicCategory(filterTopicCategory === 'geometry' ? 'all' : 'geometry')}
-              className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                filterTopicCategory === 'geometry'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              <Shapes className="w-3 h-3" />
-              <span>Hình học ({gradeAssignments.filter(a => matchesTopicCategory(a.topic, 'geometry')).length})</span>
-            </button>
-          </div>
-
-          <div className="text-slate-500 dark:text-slate-400">
-            Hiển thị <strong className="text-slate-800 dark:text-slate-100">{filteredAssignments.length}</strong> bài tập Lớp {validGrade}
           </div>
         </div>
       </div>
@@ -293,48 +265,48 @@ export const GradeAssignmentsPage: React.FC<GradeAssignmentsPageProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-4.5">
           {filteredAssignments.map((asg) => {
             const isGeometry = matchesTopicCategory(asg.topic, 'geometry');
 
             return (
               <div
                 key={asg.id}
-                className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-lg transition-all flex flex-col justify-between group"
+                className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/80 transition-all flex flex-col justify-between group"
               >
                 <div>
                   {/* Card Header Badges */}
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center space-x-1.5">
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${gradeMeta.colorScheme.badgeBg} ${gradeMeta.colorScheme.badgeText}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${gradeMeta.colorScheme.badgeBg} ${gradeMeta.colorScheme.badgeText}`}>
                         Lớp {asg.grade}
                       </span>
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                         isGeometry 
-                          ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
-                          : 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60'
+                          : 'bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60'
                       }`}>
                         {isGeometry ? '📐 Hình học' : '🔢 Đại số'}
                       </span>
                     </div>
 
-                    <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900">
+                    <span className="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900">
                       {asg.assignmentCode}
                     </span>
                   </div>
 
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 mt-2">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 mt-1.5">
                     {asg.title}
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
                     {asg.topic}
                   </p>
 
                   {/* Details stats */}
-                  <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">
                     <div className="flex items-center space-x-1.5">
                       <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
-                      <span><strong>{asg.questions.length}</strong> câu trắc nghiệm</span>
+                      <span><strong>{asg.questions.length}</strong> câu hỏi</span>
                     </div>
                     <div className="flex items-center space-x-1.5">
                       <Clock className="w-3.5 h-3.5 text-amber-500" />
@@ -344,31 +316,31 @@ export const GradeAssignmentsPage: React.FC<GradeAssignmentsPageProps> = ({
                 </div>
 
                 {/* Card Actions */}
-                <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="mt-4 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
                   <button
                     onClick={() => handleStartExam(asg)}
-                    className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-sm rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-98"
+                    className="w-full py-2 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center space-x-1.5 cursor-pointer active:scale-98"
                   >
                     <span>LÀM BÀI NGAY</span>
-                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <Play className="w-3 h-3 fill-white" />
                   </button>
 
-                  <div className="grid grid-cols-3 gap-1.5 text-xs font-semibold">
+                  <div className="grid grid-cols-3 gap-1.5 text-[11px] font-semibold">
                     <button
                       onClick={() => setPrintingAssignment(asg)}
-                      className="py-1.5 px-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                      className="py-1 px-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-center space-x-1 cursor-pointer transition-colors"
                       title="In đề thi / Xuất PDF"
                     >
-                      <Printer className="w-3.5 h-3.5 text-slate-500" />
+                      <Printer className="w-3 h-3 text-slate-500" />
                       <span>In PDF</span>
                     </button>
 
                     <button
                       onClick={() => setSharingAssignment(asg)}
-                      className="py-1.5 px-2 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-800 flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                      className="py-1 px-1.5 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200/80 dark:border-blue-800/80 flex items-center justify-center space-x-1 cursor-pointer transition-colors"
                       title="Lấy mã QR chia sẻ"
                     >
-                      <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                      <Share2 className="w-3 h-3 text-blue-600" />
                       <span>Lấy QR</span>
                     </button>
 
@@ -380,10 +352,10 @@ export const GradeAssignmentsPage: React.FC<GradeAssignmentsPageProps> = ({
                           navigate(`/join?code=${asg.assignmentCode}`);
                         }
                       }}
-                      className="py-1.5 px-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                      className="py-1 px-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200/80 dark:border-indigo-800/80 flex items-center justify-center space-x-1 cursor-pointer transition-colors"
                       title="Làm thử chế độ giáo viên"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                      <Sparkles className="w-3 h-3 text-indigo-600" />
                       <span>Làm thử</span>
                     </button>
                   </div>

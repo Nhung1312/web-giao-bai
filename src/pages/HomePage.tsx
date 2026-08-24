@@ -52,15 +52,12 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
           <span>Hệ thống Ôn tập & Kiểm tra Toán THCS trực tuyến</span>
         </div>
 
-        {/* Main Headings */}
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-tight mb-3">
-          TOÁN THCS
-        </h1>
-        <p className="text-xl sm:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-600 dark:from-blue-400 dark:via-indigo-400 dark:to-teal-300 mb-6">
+        {/* Main Heading */}
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-600 dark:from-blue-400 dark:via-indigo-400 dark:to-teal-300 tracking-tight leading-tight mb-4">
           Lớp 6 • Lớp 7 • Lớp 8 • Lớp 9
-        </p>
+        </h1>
         <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed mb-8">
-          Chọn lớp học của bạn để xem toàn bộ ngân hàng đề thi, bài tập ôn luyện theo phân môn Đại số và Hình học, làm bài trực tiếp và nhận điểm số kèm lời giải chi tiết.
+          Khám phá ngân hàng đề thi và bài tập trắc nghiệm Toán THCS. Làm bài trực tiếp, chấm điểm tức thì và xem lời giải chi tiết.
         </p>
 
         {/* Quick Code Entry Box */}

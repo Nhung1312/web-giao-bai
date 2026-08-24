@@ -108,16 +108,16 @@ export const StudentProgressBar: React.FC<StudentProgressBarProps> = ({ assignme
 
   return (
     <>
-      {/* Top Floating / Sticky Status Bar */}
+      {/* Top Floating / Sticky Status Bar - Compact & Modern */}
       <section 
         aria-label="Thanh trạng thái tiến độ học tập"
-        className="w-full bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border-b border-indigo-900/60 shadow-inner px-3 sm:px-6 py-2.5 transition-all text-xs"
+        className="w-full bg-slate-950/95 dark:bg-slate-950/95 text-white border-b border-indigo-950/80 px-3 sm:px-6 py-1.5 transition-all text-xs shadow-xs backdrop-blur-md"
       >
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
           {/* Left: Student Identity & Streak */}
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-1.5 bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-xl backdrop-blur-xs border border-white/10 transition-colors">
-              <GraduationCap className="w-3.5 h-3.5 text-indigo-300" />
+          <div className="flex items-center space-x-2 shrink-0">
+            <div className="flex items-center space-x-1.5 bg-white/10 hover:bg-white/15 px-2 py-0.5 rounded-lg border border-white/10 transition-colors">
+              <GraduationCap className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
               {isEditingName ? (
                 <form onSubmit={handleSaveName} className="flex items-center space-x-1">
                   <input
@@ -126,7 +126,7 @@ export const StudentProgressBar: React.FC<StudentProgressBarProps> = ({ assignme
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="Nhập tên..."
-                    className="w-24 px-1.5 py-0.5 bg-slate-800 text-white text-xs rounded border border-indigo-400 focus:outline-none"
+                    className="w-20 px-1 py-0.5 bg-slate-800 text-white text-[11px] rounded border border-indigo-400 focus:outline-none"
                   />
                   <button type="submit" className="text-emerald-400 hover:text-emerald-300">
                     <Check className="w-3 h-3" />
@@ -141,64 +141,63 @@ export const StudentProgressBar: React.FC<StudentProgressBarProps> = ({ assignme
                     setTempName(studentName || '');
                     setIsEditingName(true);
                   }}
-                  className="font-bold text-white hover:text-indigo-200 cursor-pointer flex items-center space-x-1"
+                  className="font-bold text-[11px] sm:text-xs text-white hover:text-indigo-200 cursor-pointer flex items-center space-x-1"
                   title="Nhấp để đổi tên học sinh"
                 >
-                  <span>{studentName || 'Học sinh'}</span>
-                  <span className="text-[10px] text-indigo-300 font-normal underline">✏️</span>
+                  <span className="truncate max-w-[90px] sm:max-w-[120px]">{studentName || 'Học sinh'}</span>
+                  <span className="text-[10px] text-indigo-300 font-normal">✏️</span>
                 </button>
               )}
             </div>
 
             {/* Streak Days */}
             <div 
-              className="flex items-center space-x-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg font-bold"
+              className="flex items-center space-x-1 bg-amber-500/15 text-amber-300 border border-amber-500/25 px-1.5 py-0.5 rounded-md font-bold text-[11px]"
               title="Chuỗi ngày luyện tập chăm chỉ"
             >
-              <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-              <span>{streakDays} ngày</span>
+              <Flame className="w-3 h-3 text-amber-400" />
+              <span>{streakDays}d</span>
             </div>
           </div>
 
-          {/* Center: Overall Score & Progress Bar */}
-          <div className="flex-1 max-w-md hidden md:flex items-center space-x-3">
-            <div className="flex items-center space-x-1.5 text-slate-300 font-medium shrink-0">
-              <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-              <span>Tổng điểm:</span>
-              <strong className="text-yellow-300 font-mono font-bold text-sm">
-                {totalPoints} {totalMax > 0 && <span className="text-slate-400 text-xs">/ {totalMax}</span>}
+          {/* Center: Overall Score & Compact Progress Bar */}
+          <div className="flex-1 max-w-sm hidden md:flex items-center space-x-2.5">
+            <div className="flex items-center space-x-1 text-slate-300 text-[11px] shrink-0">
+              <Trophy className="w-3 h-3 text-yellow-400" />
+              <span className="text-slate-400">Điểm:</span>
+              <strong className="text-yellow-300 font-mono font-bold">
+                {totalPoints} {totalMax > 0 && <span className="text-slate-500 text-[10px]">/{totalMax}</span>}
               </strong>
             </div>
 
             {/* Progress bar */}
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between text-[11px] text-slate-300 font-semibold">
-                <span>Tiến độ 4 Lớp:</span>
-                <span className="text-emerald-400 font-bold">{completedCount}/{totalAssignmentsCount} bài ({overallPercentage}%)</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden p-0.5 border border-white/10">
+            <div className="flex-1 flex items-center space-x-2">
+              <div className="w-full bg-slate-800/90 rounded-full h-1.5 overflow-hidden border border-white/5">
                 <div 
                   className="bg-gradient-to-r from-emerald-400 via-teal-400 to-indigo-400 h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.max(5, overallPercentage)}%` }}
                 />
               </div>
+              <span className="text-[10px] text-emerald-400 font-bold font-mono shrink-0">
+                {completedCount}/{totalAssignmentsCount}
+              </span>
             </div>
           </div>
 
           {/* Right: Quick Stats & Detail Modal Button */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 shrink-0">
             {/* Mobile score badge */}
-            <div className="md:hidden flex items-center space-x-1 bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 px-2 py-0.5 rounded-lg font-bold">
+            <div className="md:hidden flex items-center space-x-1 bg-yellow-400/15 text-yellow-300 border border-yellow-400/20 px-1.5 py-0.5 rounded-md font-bold text-[11px]">
               <Trophy className="w-3 h-3 text-yellow-400" />
               <span>{totalPoints}đ</span>
             </div>
 
             <button
               onClick={() => setProgressModalOpen(true)}
-              className="inline-flex items-center space-x-1.5 px-3 py-1 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 border border-indigo-400/30 text-xs"
+              className="inline-flex items-center space-x-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-all cursor-pointer active:scale-95 text-[11px] shadow-2xs"
             >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Xem tiến độ học tập</span>
+              <BarChart3 className="w-3 h-3" />
+              <span className="hidden sm:inline">Tiến độ</span>
               <ChevronRight className="w-3 h-3" />
             </button>
           </div>

@@ -39,8 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
             </div>
           </Link>
 
-          {/* Grade Quick Navigation Dropdown/Buttons on larger screens */}
-          <div className="hidden lg:flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+          {/* Grade Quick Navigation Buttons in Navbar */}
+          <div className="hidden sm:flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
             {(['6', '7', '8', '9'] as GradeLevel[]).map((g) => {
               const active = location.pathname === `/grade/${g}`;
               return (
