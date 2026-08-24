@@ -3,6 +3,7 @@ import { Assignment, Submission, ViolationEvent } from '../../types';
 import { MathDisplay } from '../../components/MathDisplay';
 import { GradingService } from '../../services/gradingService';
 import { StorageService } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
 import { useTheme } from '../../context/ThemeContext';
 import { shuffleAssignmentQuestionsAndOptions, formatViolationTime } from '../../utils/antiCheatUtils';
 import { 
@@ -491,6 +492,12 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       isShuffled: true
     });
 
+    // 1. Save to Cloud Firestore
+    FirestoreService.saveResult(submission).catch((err) => {
+      console.warn('Lỗi lưu kết quả bài thi lên Firestore:', err);
+    });
+
+    // 2. Save locally
     StorageService.saveSubmission(submission);
     onFinishExam(submission);
   };

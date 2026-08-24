@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Assignment, ClassRoom, GradeLevel, Question, QuestionOption } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
+import { useAuth } from '../../context/AuthContext';
 import { aiService } from '../../services/aiService';
 import { FileUploadModal } from '../../components/FileUploadModal';
 import { MathDisplay } from '../../components/MathDisplay';
@@ -19,7 +21,8 @@ import {
   AlertCircle,
   UploadCloud,
   FileSpreadsheet,
-  FileType
+  FileType,
+  Loader2
 } from 'lucide-react';
 
 interface TeacherCreateAssignmentProps {
@@ -46,6 +49,8 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   onSaveSuccess,
   onCancel
 }) => {
+  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
   const [searchParams] = useSearchParams();
   const paramGrade = searchParams.get('grade');
   const validParamGrade = (paramGrade === '6' || paramGrade === '7' || paramGrade === '8' || paramGrade === '9') ? (paramGrade as GradeLevel) : undefined;
@@ -205,7 +210,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       alert('Vui lòng nhập tên bài tập.');
@@ -226,28 +231,46 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
       }
     }
 
-    const targetClass = classes.find(c => c.id === classId);
-    const className = targetClass ? targetClass.name : 'Toàn khối';
-    const assignmentCode = StorageService.generateAssignmentCode(grade, className);
+    setIsSaving(true);
 
-    const newAssignment: Assignment = {
-      id: `asg_${Date.now()}`,
-      title: title.trim(),
-      grade,
-      topic: topic.trim(),
-      classId,
-      className,
-      questions,
-      durationMinutes,
-      deadline,
-      allowViewResult,
-      assignmentCode,
-      createdAt: new Date().toISOString(),
-      isPublished: true
-    };
+    try {
+      const targetClass = classes.find(c => c.id === classId);
+      const className = targetClass ? targetClass.name : 'Toàn khối';
+      const assignmentCode = StorageService.generateAssignmentCode(grade, className);
 
-    StorageService.saveAssignment(newAssignment);
-    onSaveSuccess(newAssignment);
+      const newAssignment: Assignment = {
+        id: `asg_${Date.now()}`,
+        title: title.trim(),
+        grade,
+        topic: topic.trim(),
+        classId,
+        className,
+        questions,
+        durationMinutes,
+        deadline,
+        allowViewResult,
+        assignmentCode,
+        createdAt: new Date().toISOString(),
+        isPublished: true
+      };
+
+      // 1. Save to Cloud Firestore
+      try {
+        await FirestoreService.saveExam(newAssignment, user || undefined);
+      } catch (firestoreErr) {
+        console.warn('Lưu Firestore thất bại, lưu dự phòng LocalStorage:', firestoreErr);
+      }
+
+      // 2. Save to Local Cache
+      StorageService.saveAssignment(newAssignment);
+
+      setIsSaving(false);
+      onSaveSuccess(newAssignment);
+    } catch (err) {
+      console.error('Lỗi khi lưu đề thi:', err);
+      setIsSaving(false);
+      alert('Có lỗi xảy ra khi lưu đề thi. Vui lòng thử lại.');
+    }
   };
 
   return (
@@ -264,16 +287,27 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+            disabled={isSaving}
+            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50"
           >
             Hủy
           </button>
           <button
             onClick={handleSave}
-            className="inline-flex items-center space-x-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm transition-all active:scale-95"
+            disabled={isSaving}
+            className="inline-flex items-center space-x-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
           >
-            <Save className="w-4 h-4" />
-            <span>LƯU BÀI TẬP</span>
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>ĐANG LƯU...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>LƯU BÀI TẬP</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -614,10 +648,20 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
           </div>
           <button
             type="submit"
-            className="inline-flex items-center space-x-2 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95"
+            disabled={isSaving}
+            className="inline-flex items-center space-x-2 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
           >
-            <Save className="w-4 h-4" />
-            <span>LƯU & TẠO MÃ BÀI TẬP</span>
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>ĐANG LƯU BÀI TẬP...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>LƯU & TẠO MÃ BÀI TẬP</span>
+              </>
+            )}
           </button>
         </div>
       </form>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { StorageService } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
 import { Assignment, ClassRoom } from '../../types';
 import { 
   ArrowRight, 
@@ -18,7 +19,8 @@ import {
   Moon,
   ChevronRight,
   Zap,
-  GraduationCap
+  GraduationCap,
+  Loader2
 } from 'lucide-react';
 
 interface StudentJoinPageProps {
@@ -37,6 +39,7 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [recentAssignments, setRecentAssignments] = useState<Assignment[]>([]);
 
   // Search & Filter state for exam browser
@@ -51,8 +54,24 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
     if (loadedClasses.length > 0 && !selectedClassId) {
       setSelectedClassId(loadedClasses[0].id);
     }
-    const allAssignments = StorageService.getAssignments();
-    setRecentAssignments(allAssignments);
+    
+    // Load both local and firestore assignments for catalog
+    const localAssignments = StorageService.getAssignments();
+    setRecentAssignments(localAssignments);
+
+    FirestoreService.getExams().then((cloudExams) => {
+      if (cloudExams && cloudExams.length > 0) {
+        // Merge cloud exams with local exams without duplicates
+        setRecentAssignments((prev) => {
+          const map = new Map<string, Assignment>();
+          prev.forEach(a => map.set(a.assignmentCode.toUpperCase(), a));
+          cloudExams.forEach(a => map.set(a.assignmentCode.toUpperCase(), a));
+          return Array.from(map.values());
+        });
+      }
+    }).catch(err => {
+      console.warn('Could not fetch cloud exams:', err);
+    });
 
     const effectiveCode = queryCode || initialCode;
     if (effectiveCode) {
@@ -61,13 +80,34 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
     }
   }, [queryCode, initialCode]);
 
-  const handleLookupCode = (searchCode: string) => {
+  const handleLookupCode = async (searchCode: string) => {
     setErrorMsg('');
     if (!searchCode.trim()) {
       setAssignment(null);
       return;
     }
-    const found = StorageService.getAssignmentByCode(searchCode);
+
+    setIsSearching(true);
+    const cleanCode = searchCode.trim().toUpperCase();
+
+    // 1. Try local storage first
+    let found = StorageService.getAssignmentByCode(cleanCode);
+
+    // 2. If not found locally, query Cloud Firestore
+    if (!found) {
+      try {
+        found = await FirestoreService.getExamByCode(cleanCode);
+        if (found) {
+          // Cache in local storage for faster subsequent access
+          StorageService.saveAssignment(found);
+        }
+      } catch (err) {
+        console.error('Lỗi khi tra cứu Firestore:', err);
+      }
+    }
+
+    setIsSearching(false);
+
     if (found) {
       setAssignment(found);
       if (found.classId && found.classId !== 'all') {
@@ -212,9 +252,17 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
                 <button
                   type="button"
                   onClick={() => handleLookupCode(code)}
-                  className="px-4 py-3 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white text-sm font-semibold rounded-xl transition-colors shrink-0 cursor-pointer"
+                  disabled={isSearching}
+                  className="px-4 py-3 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white text-sm font-semibold rounded-xl transition-colors shrink-0 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Kiểm tra
+                  {isSearching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang tìm...</span>
+                    </>
+                  ) : (
+                    <span>Kiểm tra</span>
+                  )}
                 </button>
               </div>
               

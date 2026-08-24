@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { StorageService } from './services/storageService';
+import { FirestoreService } from './services/firestoreService';
 import { Assignment, ClassRoom, Submission } from './types';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { PrivateRoute } from './components/PrivateRoute';
 import { Navbar } from './components/Navbar';
 import { StudentProgressBar } from './components/StudentProgressBar';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -13,11 +16,13 @@ import { TeacherLayout } from './pages/teacher/TeacherLayout';
 import { StudentJoinPage } from './pages/student/StudentJoinPage';
 import { StudentExamPage } from './pages/student/StudentExamPage';
 import { StudentResultPage } from './pages/student/StudentResultPage';
+import { LoginPage } from './pages/LoginPage';
 import { useLearningProgressStore } from './store/useLearningProgressStore';
 
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   // Persistent storage state
   const [classes, setClasses] = useState<ClassRoom[]>([]);
@@ -58,10 +63,29 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const refreshAllData = () => {
-    setClasses(StorageService.getClasses());
-    setAssignments(StorageService.getAssignments());
-    setSubmissions(StorageService.getSubmissions());
+  const refreshAllData = async () => {
+    // 1. Instant local read
+    const localClasses = StorageService.getClasses();
+    const localAssignments = StorageService.getAssignments();
+    const localSubmissions = StorageService.getSubmissions();
+
+    setClasses(localClasses);
+    setAssignments(localAssignments);
+    setSubmissions(localSubmissions);
+
+    // 2. Fetch latest from Cloud Firestore
+    try {
+      const cloudExams = await FirestoreService.getExams();
+      if (cloudExams && cloudExams.length > 0) {
+        const map = new Map<string, Assignment>();
+        localAssignments.forEach(a => map.set(a.assignmentCode.toUpperCase(), a));
+        cloudExams.forEach(a => map.set(a.assignmentCode.toUpperCase(), a));
+        const merged = Array.from(map.values());
+        setAssignments(merged);
+      }
+    } catch (e) {
+      console.warn('Syncing exams from Firestore:', e);
+    }
   };
 
   const handleResetData = () => {
@@ -144,6 +168,12 @@ function AppContent() {
             element={<HomePage assignments={assignments} />} 
           />
 
+          {/* Login Page */}
+          <Route 
+            path="/login" 
+            element={<LoginPage />} 
+          />
+
           {/* Specific Grade Assignments Page */}
           <Route
             path="/grade/:gradeId"
@@ -201,19 +231,21 @@ function AppContent() {
             }
           />
 
-          {/* Teacher Portal */}
+          {/* Protected Teacher Portal */}
           <Route
             path="/teacher/*"
             element={
-              <TeacherLayout
-                classes={classes}
-                assignments={assignments}
-                submissions={submissions}
-                onRefreshData={refreshAllData}
-                onOpenShare={(asg) => setShareAssignment(asg)}
-                onTestAssignment={handleTestAssignmentFromTeacher}
-                onResetData={handleResetData}
-              />
+              <PrivateRoute>
+                <TeacherLayout
+                  classes={classes}
+                  assignments={assignments}
+                  submissions={submissions}
+                  onRefreshData={refreshAllData}
+                  onOpenShare={(asg) => setShareAssignment(asg)}
+                  onTestAssignment={handleTestAssignmentFromTeacher}
+                  onResetData={handleResetData}
+                />
+              </PrivateRoute>
             }
           />
 
@@ -247,7 +279,10 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </BrowserRouter>
   );
 }
+
