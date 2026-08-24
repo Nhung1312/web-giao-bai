@@ -30,7 +30,7 @@ export const firebaseConfig = {
   projectId: "onluyenpro-53b11",
   storageBucket: "onluyenpro-53b11.firebasestorage.app",
   messagingSenderId: "271702658864",
-  appId: "1:271702658864:web:78c3f563accdd990c9c2f5"
+  appId: "1:271702658864:web:3356c5212459347dc9c2f5"
 };
 
 // Initialize Firebase app safely
