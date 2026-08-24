@@ -25,7 +25,7 @@ import {
 } from 'firebase/firestore';
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBbEn75Nwp1kuwoEypvEJDIia94_MiVfJE",
+  apiKey: "AIzaSyCJaQgSfMYC1RqLeCXWT_SJrQWlLs7PSkg",
   authDomain: "onluyenpro-53b11.firebaseapp.com",
   projectId: "onluyenpro-53b11",
   storageBucket: "onluyenpro-53b11.firebasestorage.app",
