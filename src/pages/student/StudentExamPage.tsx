@@ -63,6 +63,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   const { isDark, toggleTheme } = useTheme();
   const draftStorageKey = `toan_thcs_draft_${assignment.id}_${encodeURIComponent(studentName)}`;
 
+  // Chỉ bật chế độ 2 cột khi đề thi được đánh dấu chính xác là loại 'pdf'
+  // Đảm bảo không xung đột với tính năng bóc tách PDF thành Text
+  const isPdfMode = (assignment as any).type === 'pdf';
+
   // 1. Restore draft if available from LocalStorage
   const [initialLoadedDraft] = useState<ExamDraft | null>(() => {
     try {
@@ -77,7 +81,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   });
 
   // 2. SHUFFLE SYSTEM: Ensure questions & options are randomized per student/session
-  // If draft exists with saved shuffled assignment, restore that exact instance; otherwise shuffle afresh.
   const [currentAssignment, setCurrentAssignment] = useState<Assignment>(() => {
     if (initialLoadedDraft?.shuffledAssignment && initialLoadedDraft.shuffledAssignment.questions?.length > 0) {
       return initialLoadedDraft.shuffledAssignment;
@@ -176,7 +179,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     }
   }, [answers, flaggedQuestions, timeLeft, currentIndex, startedAt, currentAssignment, tabSwitchCount, violationEvents, draftStorageKey]);
 
-  // Periodic Auto-save upon answer change & every 4s
   useEffect(() => {
     saveProgressToLocalStorage();
   }, [answers, flaggedQuestions, currentIndex, tabSwitchCount, saveProgressToLocalStorage]);
@@ -218,11 +220,9 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // Tab was hidden / user switched tab or minimized browser
         isAway = true;
         awayStartTime = Date.now();
       } else {
-        // Returned to tab
         if (isAway) {
           isAway = false;
           const awayDuration = Math.round((Date.now() - awayStartTime) / 1000);
@@ -269,27 +269,23 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   // ANTI-CHEAT FEATURE 2: DISABLE RIGHT-CLICK, COPY, CUT, SELECTION, SHORTCUTS
   // =========================================================================
   useEffect(() => {
-    // 1. Disable Context Menu (Right-Click)
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       triggerAntiCheatToast('🔒 Chuột phải (Right-Click) đã bị vô hiệu hóa trong phòng thi!');
       return false;
     };
 
-    // 2. Disable Copy event
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
       triggerAntiCheatToast('🚫 Vô hiệu hóa chức năng Sao chép (Copy text) để đảm bảo tính trung thực!');
       return false;
     };
 
-    // 3. Disable Cut event
     const handleCut = (e: ClipboardEvent) => {
       e.preventDefault();
       return false;
     };
 
-    // 4. Disable Selection Start
     const handleSelectStart = (e: Event) => {
       const target = e.target as HTMLElement;
       if (['input', 'textarea'].includes((target?.tagName || '').toLowerCase())) {
@@ -299,12 +295,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       return false;
     };
 
-    // 5. Disable Keyboard Shortcuts (Ctrl+C, Ctrl+V, Ctrl+A, Ctrl+X, Ctrl+U, Ctrl+P, F12, DevTools)
     const handleKeyDownAntiCheat = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       const isCtrlOrMeta = e.ctrlKey || e.metaKey;
 
-      // DevTools & Source inspect blocking
       if (
         e.key === 'F12' ||
         (isCtrlOrMeta && e.shiftKey && ['i', 'j', 'c', 'k'].includes(key)) ||
@@ -316,7 +310,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         return false;
       }
 
-      // Copy / Cut / Select all blocking
       if (isCtrlOrMeta && ['c', 'x', 'a'].includes(key)) {
         const target = document.activeElement as HTMLElement;
         if (['input', 'textarea'].includes((target?.tagName || '').toLowerCase())) {
@@ -344,7 +337,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     };
   }, [triggerAntiCheatToast]);
 
-  // Prevent accidental page unload
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
@@ -355,7 +347,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Timer countdown
   useEffect(() => {
     if (totalSeconds <= 0) return;
 
@@ -373,7 +364,14 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => clearInterval(timer);
   }, [totalSeconds]);
 
-  // Keyboard navigation shortcuts (1-4 or A-D, Left/Right arrow, F for flag)
+  // Cập nhật hàm xử lý chọn đáp án để nhận id của câu hỏi (hỗ trợ chế độ PDF)
+  const handleSelectOption = (qId: string, optionId: string) => {
+    setAnswers(prev => ({
+      ...prev,
+      [qId]: optionId
+    }));
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['input', 'textarea'].includes((document.activeElement?.tagName || '').toLowerCase())) {
@@ -385,13 +383,13 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       } else if (e.key === 'ArrowLeft') {
         handlePrev();
       } else if (['1', 'a', 'A'].includes(e.key)) {
-        handleSelectOption('A');
+        if (currentQ) handleSelectOption(currentQ.id, currentQ.options?.[0]?.id || 'A');
       } else if (['2', 'b', 'B'].includes(e.key)) {
-        handleSelectOption('B');
+        if (currentQ) handleSelectOption(currentQ.id, currentQ.options?.[1]?.id || 'B');
       } else if (['3', 'c', 'C'].includes(e.key)) {
-        handleSelectOption('C');
+        if (currentQ) handleSelectOption(currentQ.id, currentQ.options?.[2]?.id || 'C');
       } else if (['4', 'd', 'D'].includes(e.key)) {
-        handleSelectOption('D');
+        if (currentQ) handleSelectOption(currentQ.id, currentQ.options?.[3]?.id || 'D');
       } else if (['f', 'F'].includes(e.key)) {
         toggleFlagCurrentQuestion();
       }
@@ -400,14 +398,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, currentQ, questions.length]);
-
-  const handleSelectOption = (optionId: string) => {
-    if (!currentQ) return;
-    setAnswers(prev => ({
-      ...prev,
-      [currentQ.id]: optionId
-    }));
-  };
 
   const toggleFlagCurrentQuestion = () => {
     if (!currentQ) return;
@@ -446,13 +436,11 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     }
   };
 
-  // Reset exam -> Reshuffle new version
   const handleResetExamProgress = () => {
     try {
       localStorage.removeItem(draftStorageKey);
     } catch {}
     
-    // Generate fresh shuffle
     const freshShuffled = shuffleAssignmentQuestionsAndOptions(assignment);
     setCurrentAssignment(freshShuffled);
     setAnswers({});
@@ -492,12 +480,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       isShuffled: true
     });
 
-    // 1. Save to Cloud Firestore
     FirestoreService.saveResult(submission).catch((err) => {
       console.warn('Lỗi lưu kết quả bài thi lên Firestore:', err);
     });
 
-    // 2. Save locally
     StorageService.saveSubmission(submission);
     onFinishExam(submission);
   };
@@ -574,7 +560,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </div>
       )}
 
-      {/* TOP BAR / FOCUS HEADER */}
+      {/* TOP BAR / FOCUS HEADER (DÙNG CHUNG CHO CẢ PDF VÀ TEXT) */}
       <header
         className={`sticky top-0 z-30 transition-colors border-b px-4 py-2.5 ${
           isFocusMode
@@ -582,7 +568,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
             : 'bg-white/95 dark:bg-slate-900/95 border-slate-200 dark:border-slate-800 shadow-xs backdrop-blur-md'
         }`}
       >
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
           {/* Left: Title & Anti-Cheat Badge */}
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <div className="min-w-0">
@@ -634,7 +620,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                 {/* Shuffled badge */}
                 <span className="hidden md:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold text-[10px]">
                   <Shuffle className="w-2.5 h-2.5" />
-                  <span>Đề trộn ngẫu nhiên</span>
+                  <span>Đề ngẫu nhiên</span>
                 </span>
 
                 <span className="hidden sm:inline text-slate-400">•</span>
@@ -647,41 +633,43 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
           {/* Right: Controls & Timer & Submit */}
           <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
-            {/* Font scaling tool */}
-            <div
-              className={`hidden lg:flex items-center rounded-xl p-0.5 border ${
-                isFocusMode
-                  ? 'bg-slate-900 border-slate-800 text-slate-300'
-                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              <button
-                onClick={() => setFontSizeScale('normal')}
-                title="Cỡ chữ chuẩn"
-                className={`px-2 py-1 text-xs font-bold rounded-lg ${
-                  fontSizeScale === 'normal'
-                    ? isFocusMode
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                    : 'hover:text-slate-900 dark:hover:text-white'
+            {/* Font scaling tool (chỉ hiện khi là đề text) */}
+            {!isPdfMode && (
+              <div
+                className={`hidden lg:flex items-center rounded-xl p-0.5 border ${
+                  isFocusMode
+                    ? 'bg-slate-900 border-slate-800 text-slate-300'
+                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
                 }`}
               >
-                A
-              </button>
-              <button
-                onClick={() => setFontSizeScale('large')}
-                title="Cỡ chữ lớn"
-                className={`px-2 py-1 text-xs font-bold rounded-lg ${
-                  fontSizeScale === 'large'
-                    ? isFocusMode
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                    : 'hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                A+
-              </button>
-            </div>
+                <button
+                  onClick={() => setFontSizeScale('normal')}
+                  title="Cỡ chữ chuẩn"
+                  className={`px-2 py-1 text-xs font-bold rounded-lg ${
+                    fontSizeScale === 'normal'
+                      ? isFocusMode
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                      : 'hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  A
+                </button>
+                <button
+                  onClick={() => setFontSizeScale('large')}
+                  title="Cỡ chữ lớn"
+                  className={`px-2 py-1 text-xs font-bold rounded-lg ${
+                    fontSizeScale === 'large'
+                      ? isFocusMode
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                      : 'hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  A+
+                </button>
+              </div>
+            )}
 
             {/* Dark Mode Toggle */}
             <button
@@ -765,325 +753,406 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </div>
       </header>
 
-      {/* MAIN QUESTION FOCUS CONTAINER WITH 2-COLUMN LAYOUT (DESKTOP STICKY SIDEBAR + MAIN QUESTION) */}
-      <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          
-          {/* LEFT COLUMN: MAIN QUESTION CARD (lg:col-span-8 xl:col-span-9) */}
-          <div className="lg:col-span-8 xl:col-span-9 space-y-4">
-            <div
-              className={`rounded-3xl p-5 sm:p-8 shadow-xl border transition-all ${
-                isFocusMode
-                  ? 'bg-slate-950 border-slate-800 text-slate-100 shadow-indigo-950/20'
-                  : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-slate-200/60 dark:shadow-none text-slate-900 dark:text-white'
-              }`}
-            >
-              {/* Question Card Header */}
-              <div
-                className={`flex items-center justify-between pb-4 border-b mb-6 ${
-                  isFocusMode ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span className="flex items-center justify-center w-9 h-9 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-md">
-                    {currentIndex + 1}
-                  </span>
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-                      Câu {currentIndex + 1} / {questions.length}
-                    </span>
-                    <span className="text-xs text-indigo-500 font-semibold block">
-                      {currentQ.points} điểm {currentQ.topicHint ? `• ${currentQ.topicHint}` : ''}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Flag / Bookmark button */}
-                <button
-                  type="button"
-                  onClick={toggleFlagCurrentQuestion}
-                  className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
-                    isCurrentFlagged
-                      ? 'bg-amber-500 text-white border-amber-400 shadow-xs'
-                      : isFocusMode
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                      : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                  }`}
-                >
-                  <Bookmark className={`w-3.5 h-3.5 ${isCurrentFlagged ? 'fill-white' : ''}`} />
-                  <span>{isCurrentFlagged ? 'Đã gắn cờ' : 'Gắn cờ câu này'}</span>
-                </button>
-              </div>
-
-              {/* Question Body Text (Protected from text selection) */}
-              <div 
-                className={`font-semibold mb-8 select-none ${getFontSizeClass()}`}
-                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-              >
-                <MathDisplay text={currentQ.question} />
-              </div>
-
-              {/* Options Grid (Randomized order A, B, C, D) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                {currentQ.options.map((opt) => {
-                  const isSelected = answers[currentQ.id] === opt.id;
-                  
-                  let optStyle = '';
-                  if (isSelected) {
-                    optStyle = isFocusMode
-                      ? 'border-indigo-500 bg-indigo-950/60 shadow-lg ring-2 ring-indigo-500 text-white'
-                      : 'border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-md ring-2 ring-indigo-500/20 text-indigo-950 dark:text-indigo-200';
-                  } else {
-                    optStyle = isFocusMode
-                      ? 'border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900 text-slate-200'
-                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200';
-                  }
-
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleSelectOption(opt.id)}
-                      className={`flex items-center p-3.5 sm:p-5 rounded-2xl border-2 text-left transition-all relative cursor-pointer active:scale-[0.99] select-none ${optStyle}`}
-                      style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-                    >
-                      {/* Badge A, B, C, D */}
-                      <div
-                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-sm mr-3 shrink-0 transition-colors ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white shadow-md'
-                            : isFocusMode
-                            ? 'bg-slate-800 text-slate-300 border border-slate-700'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600'
-                        }`}
-                      >
-                        {opt.id}
-                      </div>
-
-                      {/* Option Text */}
-                      <div className="flex-1 font-medium text-sm sm:text-base select-none">
-                        <MathDisplay text={opt.text} />
-                      </div>
-
-                      {/* Selection indicator */}
-                      {isSelected && (
-                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center ml-2 shrink-0 shadow-sm animate-in zoom-in-50">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Bottom Card Navigation */}
-              <div
-                className={`flex items-center justify-between mt-8 pt-6 border-t ${
-                  isFocusMode ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'
-                }`}
-              >
-                <button
-                  onClick={handlePrev}
-                  disabled={currentIndex === 0}
-                  className={`flex items-center space-x-1.5 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
-                    currentIndex === 0
-                      ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-500'
-                      : isFocusMode
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 active:scale-95'
-                      : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 active:scale-95'
-                  }`}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>CÂU TRƯỚC</span>
-                </button>
-
-                <div className="text-xs font-bold text-slate-400 hidden sm:block">
-                  Tiến độ: <strong className="text-indigo-500 font-extrabold">{answeredCount}</strong>/{questions.length} câu ({progressPercent}%)
-                </div>
-
-                {currentIndex < questions.length - 1 ? (
-                  <button
-                    onClick={handleNext}
-                    className="flex items-center space-x-1.5 px-5 sm:px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all active:scale-95 cursor-pointer"
-                  >
-                    <span>CÂU TIẾP THEO</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setShowSubmitModal(true)}
-                    className="flex items-center space-x-1.5 px-5 sm:px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-rose-600 hover:bg-rose-700 text-white shadow-lg transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Flag className="w-4 h-4" />
-                    <span>NỘP BÀI THI</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Anti-cheat and Reset shortcuts banner under question card */}
-            <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs transition-colors ${
-              isFocusMode
-                ? 'bg-slate-950 border-slate-800 text-slate-400'
-                : 'bg-white/80 dark:bg-slate-900/80 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400'
-            }`}>
-              <span className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Chế độ phòng thi an toàn: Khóa chuột phải &amp; copy text. Chuyển tab được ghi nhận tự động.</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowResetConfirmModal(true)}
-                className="text-rose-500 hover:text-rose-600 hover:underline font-bold shrink-0 cursor-pointer"
-              >
-                Làm lại từ đầu
-              </button>
-            </div>
+      {/* ========================================================================= */}
+      {/* PHẦN RẼ NHÁNH GIAO DIỆN CHÍNH (MAIN CONTENT) */}
+      {/* ========================================================================= */}
+      {isPdfMode ? (
+        
+        // --- 1. GIAO DIỆN ĐỀ PDF (CHIA 2 CỘT) ---
+        <main className="w-full flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl mx-auto border-x border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          {/* CỘT TRÁI (65%): Trình xem đề thi PDF */}
+          <div className="w-full lg:w-[65%] h-[40vh] lg:h-auto relative border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-300 dark:bg-slate-950">
+            <iframe 
+              src={`${assignment.pdfUrl}#toolbar=0`} 
+              className="w-full h-full border-none"
+              title="Đề thi PDF"
+            />
           </div>
 
-          {/* RIGHT COLUMN: STICKY QUESTION NAVIGATION GRID (DESKTOP ONLY lg:block) */}
-          <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-20">
-            <div
-              className={`rounded-3xl p-4 sm:p-5 shadow-lg border transition-all ${
-                isFocusMode
-                  ? 'bg-slate-950 border-slate-800 text-slate-100'
-                  : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-slate-200/50 dark:shadow-none text-slate-900 dark:text-white'
-              }`}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-                    <LayoutGrid className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-900 dark:text-white">
-                      Bảng câu hỏi
-                    </h3>
-                    <p className="text-[10px] text-slate-400">
-                      Nhấp để chuyển câu nhanh
-                    </p>
-                  </div>
-                </div>
-
-                <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs border border-indigo-100 dark:border-indigo-900">
-                  {answeredCount}/{questions.length}
-                </span>
+          {/* CỘT PHẢI (35%): Phiếu điền đáp án Digital */}
+          <div className="w-full lg:w-[35%] flex flex-col h-full bg-white dark:bg-slate-900">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex justify-between items-center shrink-0">
+              <h2 className="font-extrabold text-slate-800 dark:text-slate-100">Phiếu Trả Lời Trắc Nghiệm</h2>
+              <div className="flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200 dark:border-emerald-800">
+                <CheckCircle className="w-4 h-4" />
+                Đã làm: {answeredCount}/{questions.length}
               </div>
-
-              {/* Mini Progress Bar */}
-              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3.5">
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-
-              {/* Status Color Legend */}
-              <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-3.5">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600"></span> Đã làm ({answeredCount})
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-500"></span> Gắn cờ ({flaggedCount})
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600"></span> Chưa làm ({unansweredCount})
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-indigo-500 ring-1 ring-indigo-400"></span> Đang xem
-                </span>
-              </div>
-
-              {/* Question Number Grid (Compact 5 columns on desktop) */}
-              <div className="grid grid-cols-5 gap-1.5 max-h-[calc(100vh-320px)] overflow-y-auto pr-0.5 custom-scrollbar">
-                {questions.map((q, idx) => {
-                  const isAnswered = !!answers[q.id];
-                  const isFlagged = flaggedQuestions.includes(q.id);
-                  const isCurrent = idx === currentIndex;
-
-                  // Base state: Unanswered (light gray/white)
-                  let btnClass = isFocusMode
-                    ? 'bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700';
-
-                  // Answered state: Indigo/blue solid background
-                  if (isAnswered) {
-                    btnClass = 'bg-indigo-600 text-white font-black shadow-xs hover:bg-indigo-700';
-                  }
-
-                  // Flagged state: If answered with flag or just flagged
-                  if (isFlagged && !isAnswered) {
-                    btnClass = 'bg-amber-500 text-white font-black shadow-xs ring-1 ring-amber-300 hover:bg-amber-600';
-                  }
-
-                  // Current viewing state: Distinct glowing border/ring
-                  if (isCurrent) {
-                    btnClass += ' ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 font-black scale-105 border-2 border-indigo-600';
-                  }
-
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                {questions.map((q, index) => {
+                  const qNum = index + 1;
+                  const isCurrent = currentIndex === index;
+                  
                   return (
-                    <button
-                      key={q.id}
-                      onClick={() => setCurrentIndex(idx)}
-                      title={`Câu ${idx + 1}: ${isAnswered ? 'Đã làm' : 'Chưa làm'}${isFlagged ? ' (Đã gắn cờ)' : ''}`}
-                      className={`h-9 rounded-xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer relative active:scale-95 ${btnClass}`}
+                    <div 
+                      key={q.id} 
+                      onClick={() => setCurrentIndex(index)}
+                      className={`flex flex-col gap-2 p-3 rounded-2xl border transition-all cursor-pointer ${
+                        isCurrent 
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 shadow-md ring-1 ring-indigo-500' 
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
                     >
-                      <span>{idx + 1}</span>
-
-                      {/* Flag Indicator Badge on Top Right */}
-                      {isFlagged && (
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center bg-amber-400 text-slate-950 rounded-full shadow-xs border border-white dark:border-slate-900">
-                          <Flag className="w-1.5 h-1.5 fill-current" />
-                        </span>
-                      )}
-                    </button>
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-slate-500 dark:text-slate-400 text-sm">Câu {qNum}</span>
+                      </div>
+                      <div className="flex gap-1.5 sm:gap-2 justify-between">
+                        {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
+                          // Lấy id thực sự của option nếu có, nếu không lấy chữ cái A,B,C,D
+                          const optId = (q.options && q.options[optIdx]) ? q.options[optIdx].id : letter;
+                          const isSelected = answers[q.id] === optId;
+                          
+                          return (
+                            <button
+                              key={letter}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                handleSelectOption(q.id, optId);
+                                setCurrentIndex(index);
+                              }}
+                              className={`flex-1 aspect-square max-h-10 rounded-xl text-sm font-extrabold border transition-all active:scale-90 ${
+                                isSelected 
+                                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200 dark:ring-indigo-900' 
+                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                              }`}
+                            >
+                              {letter}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
+            </div>
 
-              {/* Sidebar Quick Action: Submit Button */}
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            {/* Anti-cheat banner dưới cùng cột phải */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 flex items-center justify-between shrink-0">
+              <span className="flex items-center gap-1">
+                <Lock className="w-3 h-3 text-indigo-500" /> Chế độ chống gian lận đang bật
+              </span>
+            </div>
+          </div>
+        </main>
+
+      ) : (
+
+        // --- 2. GIAO DIỆN ĐỀ TEXT (GIỮ NGUYÊN CODE CŨ CỦA BẠN) ---
+        <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            
+            {/* LEFT COLUMN: MAIN QUESTION CARD (lg:col-span-8 xl:col-span-9) */}
+            <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+              <div
+                className={`rounded-3xl p-5 sm:p-8 shadow-xl border transition-all ${
+                  isFocusMode
+                    ? 'bg-slate-950 border-slate-800 text-slate-100 shadow-indigo-950/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-slate-200/60 dark:shadow-none text-slate-900 dark:text-white'
+                }`}
+              >
+                {/* Question Card Header */}
+                <div
+                  className={`flex items-center justify-between pb-4 border-b mb-6 ${
+                    isFocusMode ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="flex items-center justify-center w-9 h-9 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-md">
+                      {currentIndex + 1}
+                    </span>
+                    <div>
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                        Câu {currentIndex + 1} / {questions.length}
+                      </span>
+                      <span className="text-xs text-indigo-500 font-semibold block">
+                        {currentQ.points} điểm {currentQ.topicHint ? `• ${currentQ.topicHint}` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Flag / Bookmark button */}
+                  <button
+                    type="button"
+                    onClick={toggleFlagCurrentQuestion}
+                    className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                      isCurrentFlagged
+                        ? 'bg-amber-500 text-white border-amber-400 shadow-xs'
+                        : isFocusMode
+                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                        : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    <Bookmark className={`w-3.5 h-3.5 ${isCurrentFlagged ? 'fill-white' : ''}`} />
+                    <span>{isCurrentFlagged ? 'Đã gắn cờ' : 'Gắn cờ câu này'}</span>
+                  </button>
+                </div>
+
+                {/* Question Body Text */}
+                <div 
+                  className={`font-semibold mb-8 select-none ${getFontSizeClass()}`}
+                  style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                >
+                  <MathDisplay text={currentQ.question} />
+                </div>
+
+                {/* Options Grid (Randomized order A, B, C, D) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                  {currentQ.options.map((opt) => {
+                    const isSelected = answers[currentQ.id] === opt.id;
+                    
+                    let optStyle = '';
+                    if (isSelected) {
+                      optStyle = isFocusMode
+                        ? 'border-indigo-500 bg-indigo-950/60 shadow-lg ring-2 ring-indigo-500 text-white'
+                        : 'border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-md ring-2 ring-indigo-500/20 text-indigo-950 dark:text-indigo-200';
+                    } else {
+                      optStyle = isFocusMode
+                        ? 'border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900 text-slate-200'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200';
+                    }
+
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => handleSelectOption(currentQ.id, opt.id)}
+                        className={`flex items-center p-3.5 sm:p-5 rounded-2xl border-2 text-left transition-all relative cursor-pointer active:scale-[0.99] select-none ${optStyle}`}
+                        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                      >
+                        <div
+                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-sm mr-3 shrink-0 transition-colors ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white shadow-md'
+                              : isFocusMode
+                              ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600'
+                          }`}
+                        >
+                          {opt.id}
+                        </div>
+
+                        <div className="flex-1 font-medium text-sm sm:text-base select-none">
+                          <MathDisplay text={opt.text} />
+                        </div>
+
+                        {isSelected && (
+                          <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center ml-2 shrink-0 shadow-sm animate-in zoom-in-50">
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Bottom Card Navigation */}
+                <div
+                  className={`flex items-center justify-between mt-8 pt-6 border-t ${
+                    isFocusMode ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'
+                  }`}
+                >
+                  <button
+                    onClick={handlePrev}
+                    disabled={currentIndex === 0}
+                    className={`flex items-center space-x-1.5 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                      currentIndex === 0
+                        ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-500'
+                        : isFocusMode
+                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 active:scale-95'
+                        : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 active:scale-95'
+                    }`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>CÂU TRƯỚC</span>
+                  </button>
+
+                  <div className="text-xs font-bold text-slate-400 hidden sm:block">
+                    Tiến độ: <strong className="text-indigo-500 font-extrabold">{answeredCount}</strong>/{questions.length} câu ({progressPercent}%)
+                  </div>
+
+                  {currentIndex < questions.length - 1 ? (
+                    <button
+                      onClick={handleNext}
+                      className="flex items-center space-x-1.5 px-5 sm:px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all active:scale-95 cursor-pointer"
+                    >
+                      <span>CÂU TIẾP THEO</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowSubmitModal(true)}
+                      className="flex items-center space-x-1.5 px-5 sm:px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-rose-600 hover:bg-rose-700 text-white shadow-lg transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Flag className="w-4 h-4" />
+                      <span>NỘP BÀI THI</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Anti-cheat and Reset shortcuts banner under question card */}
+              <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs transition-colors ${
+                isFocusMode
+                  ? 'bg-slate-950 border-slate-800 text-slate-400'
+                  : 'bg-white/80 dark:bg-slate-900/80 border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400'
+              }`}>
+                <span className="flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Chế độ phòng thi an toàn: Khóa chuột phải &amp; copy text. Chuyển tab được ghi nhận.</span>
+                </span>
                 <button
                   type="button"
-                  onClick={() => setShowSubmitModal(true)}
-                  className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  onClick={() => setShowResetConfirmModal(true)}
+                  className="text-rose-500 hover:text-rose-600 hover:underline font-bold shrink-0 cursor-pointer"
                 >
-                  <Flag className="w-3.5 h-3.5" />
-                  <span>NỘP BÀI THI ({answeredCount}/{questions.length})</span>
+                  Làm lại từ đầu
                 </button>
               </div>
             </div>
-          </aside>
-        </div>
-      </main>
+
+            {/* RIGHT COLUMN: STICKY QUESTION NAVIGATION GRID */}
+            <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-20">
+              <div
+                className={`rounded-3xl p-4 sm:p-5 shadow-lg border transition-all ${
+                  isFocusMode
+                    ? 'bg-slate-950 border-slate-800 text-slate-100'
+                    : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-slate-200/50 dark:shadow-none text-slate-900 dark:text-white'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                      <LayoutGrid className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-900 dark:text-white">
+                        Bảng câu hỏi
+                      </h3>
+                      <p className="text-[10px] text-slate-400">
+                        Nhấp để chuyển câu nhanh
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs border border-indigo-100 dark:border-indigo-900">
+                    {answeredCount}/{questions.length}
+                  </span>
+                </div>
+
+                {/* Mini Progress Bar */}
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3.5">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
+                {/* Status Color Legend */}
+                <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-3.5">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600"></span> Đã làm
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-500"></span> Gắn cờ
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600"></span> Chưa làm
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm border-2 border-indigo-500 ring-1 ring-indigo-400"></span> Đang xem
+                  </span>
+                </div>
+
+                {/* Question Number Grid */}
+                <div className="grid grid-cols-5 gap-1.5 max-h-[calc(100vh-320px)] overflow-y-auto pr-0.5 custom-scrollbar">
+                  {questions.map((q, idx) => {
+                    const isAnswered = !!answers[q.id];
+                    const isFlagged = flaggedQuestions.includes(q.id);
+                    const isCurrent = idx === currentIndex;
+
+                    let btnClass = isFocusMode
+                      ? 'bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700';
+
+                    if (isAnswered) {
+                      btnClass = 'bg-indigo-600 text-white font-black shadow-xs hover:bg-indigo-700';
+                    }
+
+                    if (isFlagged && !isAnswered) {
+                      btnClass = 'bg-amber-500 text-white font-black shadow-xs ring-1 ring-amber-300 hover:bg-amber-600';
+                    }
+
+                    if (isCurrent) {
+                      btnClass += ' ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 font-black scale-105 border-2 border-indigo-600';
+                    }
+
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => setCurrentIndex(idx)}
+                        title={`Câu ${idx + 1}: ${isAnswered ? 'Đã làm' : 'Chưa làm'}${isFlagged ? ' (Đã gắn cờ)' : ''}`}
+                        className={`h-9 rounded-xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer relative active:scale-95 ${btnClass}`}
+                      >
+                        <span>{idx + 1}</span>
+
+                        {isFlagged && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center bg-amber-400 text-slate-950 rounded-full shadow-xs border border-white dark:border-slate-900">
+                            <Flag className="w-1.5 h-1.5 fill-current" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Sidebar Quick Action: Submit Button */}
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitModal(true)}
+                    className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    <Flag className="w-3.5 h-3.5" />
+                    <span>NỘP BÀI THI ({answeredCount}/{questions.length})</span>
+                  </button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </main>
+      )}
 
       {/* ========================================================================= */}
-      {/* MOBILE FLOATING ACTION BUTTON (FAB) TO OPEN QUESTION NAVIGATION DRAWER     */}
+      {/* NÚT VÀ MENU ĐIỀU HƯỚNG TRÊN MOBILE (CHỈ HIỂN THỊ KHI LÀ ĐỀ TEXT)          */}
       {/* ========================================================================= */}
-      <div className="lg:hidden fixed bottom-5 right-4 z-40">
-        <button
-          type="button"
-          onClick={() => setShowMobileNav(true)}
-          className="flex items-center space-x-2 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl border border-indigo-400/40 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
-        >
-          <LayoutGrid className="w-4 h-4" />
-          <span className="font-extrabold text-xs">Câu {currentIndex + 1}/{questions.length}</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-mono font-bold">
-            {answeredCount}/{questions.length}
-          </span>
-          {flaggedCount > 0 && (
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
-              <Flag className="w-2.5 h-2.5 fill-current" />
-              {flaggedCount}
+      {!isPdfMode && (
+        <div className="lg:hidden fixed bottom-5 right-4 z-40">
+          <button
+            type="button"
+            onClick={() => setShowMobileNav(true)}
+            className="flex items-center space-x-2 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl border border-indigo-400/40 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span className="font-extrabold text-xs">Câu {currentIndex + 1}/{questions.length}</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-mono font-bold">
+              {answeredCount}/{questions.length}
             </span>
-          )}
-        </button>
-      </div>
+            {flaggedCount > 0 && (
+              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                <Flag className="w-2.5 h-2.5 fill-current" />
+                {flaggedCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
-      {/* ========================================================================= */}
-      {/* MOBILE QUESTION NAVIGATION DRAWER / BOTTOM SHEET                         */}
-      {/* ========================================================================= */}
+      {/* MOBILE QUESTION NAVIGATION DRAWER */}
       {showMobileNav && (
         <div 
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 backdrop-blur-xs p-0 sm:p-4 lg:hidden animate-in fade-in duration-150"
@@ -1162,7 +1231,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                 const isFlagged = flaggedQuestions.includes(q.id);
                 const isCurrent = idx === currentIndex;
 
-                // Filtering logic
                 if (filterNavTab === 'unanswered' && isAnswered) return null;
                 if (filterNavTab === 'flagged' && !isFlagged) return null;
 
@@ -1225,15 +1293,15 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: TAB SWITCH / LEAVE WINDOW VIOLATION WARNING (CRITICAL ANTI-CHEAT) */}
+      {/* CÁC MODAL (CẢNH BÁO, XÁC NHẬN) - CHUNG CHO CẢ PDF VÀ TEXT                 */}
       {/* ========================================================================= */}
+      
       {showViolationModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
           <div 
             className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border-2 border-rose-500 text-center relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top red header stripe */}
             <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 border border-rose-300 dark:border-rose-800 shadow-inner">
               <ShieldAlert className="w-9 h-9 animate-bounce" />
             </div>
@@ -1282,9 +1350,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: ANTI-CHEAT POLICY & SHUFFLE INFO MODAL */}
-      {/* ========================================================================= */}
       {showAntiCheatPolicyModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in duration-150"
@@ -1351,9 +1416,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: SUBMIT CONFIRMATION */}
-      {/* ========================================================================= */}
       {showSubmitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 dark:border-slate-800 text-center">
@@ -1385,7 +1447,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
               </p>
             )}
 
-            {/* Anti-cheat summary in submit modal */}
             {tabSwitchCount > 0 && (
               <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-800 text-left text-xs text-rose-800 dark:text-rose-300">
                 ⚠️ Ghi nhận <strong>{tabSwitchCount} lần rời màn hình</strong> sẽ được gửi kèm bài làm đến giáo viên.
@@ -1412,9 +1473,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 4: RESET CONFIRMATION */}
-      {/* ========================================================================= */}
       {showResetConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 text-center">
