@@ -136,6 +136,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
             classes={classes}
             initialQuestions={tabParams.initialQuestions}
             initialTitle={tabParams.initialTitle}
+            initialGrade={tabParams.initialGrade}
+            initialMode={tabParams.initialMode} // MỚI: Truyền mode PDF hoặc Text sang từ Kho Đề
             onSaveSuccess={(savedAssignment) => {
               onRefreshData();
               onOpenShare(savedAssignment);
