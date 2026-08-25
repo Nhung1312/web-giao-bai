@@ -10,7 +10,8 @@ import {
   Share2, 
   BarChart3, 
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 
 interface TeacherOverviewProps {
@@ -73,6 +74,15 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
             >
               <PlusCircle className="w-4 h-4" />
               <span>Tạo bài tập mới</span>
+            </button>
+
+            {/* Nút Kho Đề Mẫu */}
+            <button
+              onClick={() => onNavigate('exam_bank')}
+              className="inline-flex items-center space-x-2 bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-4 sm:px-5 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all active:scale-95 text-xs sm:text-sm cursor-pointer"
+            >
+              <Layers className="w-4 h-4" />
+              <span>📚 Kho đề mẫu</span>
             </button>
 
             {/* Secondary Outline Action Button */}
