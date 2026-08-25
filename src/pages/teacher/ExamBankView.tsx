@@ -8,10 +8,8 @@ import {
   Send, 
   FileText, 
   BookOpen, 
-  Calendar, 
   ArrowLeft,
-  Sparkles,
-  CheckCircle2
+  Eye
 } from 'lucide-react';
 
 interface ExamBankViewProps {
@@ -27,10 +25,14 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
 }) => {
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // State để xem trước PDF
+  const [viewingTemplate, setViewingTemplate] = useState<ExamTemplate | null>(null);
+  
+  // State cho Modal giao bài
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   
-  // Form state để giao bài từ kho đề
   const [targetClassId, setTargetClassId] = useState(classes[0]?.id || 'all');
   const [duration, setDuration] = useState(45);
   const [deadline, setDeadline] = useState('');
@@ -44,6 +46,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
     try {
       const data = await FirestoreService.getExamTemplates(teacherId);
       setTemplates(data);
+      if (data.length > 0) setViewingTemplate(data[0]); // Tự động chọn đề đầu tiên để xem
     } catch (error) {
       console.error('Lỗi tải kho đề:', error);
     } finally {
@@ -51,18 +54,21 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
     }
   };
 
-  const handleDelete = async (templateId: string, title: string) => {
+  const handleDelete = async (e: React.MouseEvent, templateId: string, title: string) => {
+    e.stopPropagation(); // Ngăn click nhầm vào thẻ card
     if (window.confirm(`Bạn có chắc chắn muốn xóa đề mẫu "${title}" khỏi kho không?`)) {
       try {
         await FirestoreService.deleteExamTemplate(templateId);
         setTemplates(prev => prev.filter(t => t.id !== templateId));
+        if (viewingTemplate?.id === templateId) setViewingTemplate(null);
       } catch (error) {
         alert('Không thể xóa đề mẫu này.');
       }
     }
   };
 
-  const handleOpenAssign = (template: ExamTemplate) => {
+  const handleOpenAssign = (e: React.MouseEvent, template: ExamTemplate) => {
+    e.stopPropagation(); // Ngăn click nhầm vào thẻ card
     setSelectedTemplate(template);
     setShowAssignModal(true);
   };
@@ -80,6 +86,8 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
       className: targetClass ? targetClass.name : 'Tất cả học sinh',
       templateId: selectedTemplate.id,
       pdfUrl: selectedTemplate.pdfUrl,
+      // Thêm flag để nhận diện đề PDF
+      type: selectedTemplate.pdfUrl ? 'pdf' : 'text', 
       questions: selectedTemplate.questions,
       durationMinutes: Number(duration),
       deadline: deadline || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
@@ -93,7 +101,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
       await FirestoreService.saveExam(newAssignment);
       alert(`Đã giao bài thành công! Mã đề cho học sinh là: ${newAssignment.assignmentCode}`);
       setShowAssignModal(false);
-      onNavigate('assignments'); // Chuyển về danh sách bài tập đã giao
+      onNavigate('assignments');
     } catch (error) {
       alert('Lỗi khi tạo bài tập từ kho đề.');
     }
@@ -113,7 +121,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
           <div>
             <div className="inline-flex items-center space-x-1.5 bg-violet-50 text-violet-700 text-[11px] font-bold px-3 py-1 rounded-full mb-1">
               <Layers className="w-3.5 h-3.5" />
-              <span>Quản lý tài nguyên</span>
+              <span>Quản lý tài nguyên PDF</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900">📚 Kho Đề Mẫu Của Tôi</h1>
           </div>
@@ -124,11 +132,11 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
           className="inline-flex items-center space-x-2 bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-4 py-2.5 rounded-xl shadow-md transition-all cursor-pointer text-xs sm:text-sm"
         >
           <Plus className="w-4 h-4" />
-          <span>Tải lên đề mới vào kho</span>
+          <span>Tải lên đề PDF mới</span>
         </button>
       </div>
 
-      {/* Main Content List */}
+      {/* Main Content: 2 Columns */}
       {loading ? (
         <div className="text-center py-12 text-slate-500">Đang tải danh sách kho đề...</div>
       ) : templates.length === 0 ? (
@@ -138,7 +146,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
           </div>
           <h3 className="text-lg font-bold text-slate-900">Kho đề của bạn đang trống</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Hãy tải lên các đề thi hoặc giáo án mẫu để lưu trữ và tái sử dụng bất cứ lúc nào bạn muốn giao bài cho học sinh.
+            Hãy tải lên các đề thi PDF để lưu trữ và giao bài nhanh chóng cho học sinh.
           </p>
           <button
             onClick={() => onNavigate('create')}
@@ -148,46 +156,93 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((tpl) => (
-            <div key={tpl.id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="bg-indigo-50 text-indigo-700 font-bold text-xs px-2.5 py-1 rounded-lg">
+        <div className="flex flex-col lg:flex-row gap-6 h-[700px]">
+          
+          {/* CỘT TRÁI: Danh sách đề */}
+          <div className="w-full lg:w-1/3 bg-white rounded-3xl p-4 border border-slate-200 shadow-sm overflow-y-auto flex flex-col gap-3">
+            <h2 className="font-bold text-slate-800 px-2 pb-2 border-b">Danh sách đề thi ({templates.length})</h2>
+            {templates.map((tpl) => (
+              <div 
+                key={tpl.id} 
+                onClick={() => setViewingTemplate(tpl)}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                  viewingTemplate?.id === tpl.id 
+                    ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-100' 
+                    : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <span className="bg-white text-indigo-700 font-bold text-[10px] px-2 py-1 rounded-md border shadow-xs">
                     Khối {tpl.grade}
                   </span>
-                  <span className="text-[11px] text-slate-400">
-                    {tpl.questions?.length || 0} câu hỏi
+                  <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                    {tpl.questions?.length || 0} câu
                   </span>
                 </div>
+                <h3 className="font-bold text-slate-900 text-sm line-clamp-2 mb-1">{tpl.title}</h3>
+                {tpl.topic && <p className="text-[11px] text-slate-500 mb-3">{tpl.topic}</p>}
 
-                <h3 className="font-bold text-slate-900 text-base line-clamp-2">{tpl.title}</h3>
-                {tpl.topic && <p className="text-xs text-slate-500 italic">Chủ đề: {tpl.topic}</p>}
+                <div className="flex items-center gap-2 mt-2 pt-3 border-t border-slate-200/60">
+                  <button
+                    onClick={(e) => handleOpenAssign(e, tpl)}
+                    className="flex-1 inline-flex justify-center items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition-colors"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Giao bài</span>
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(e, tpl.id, tpl.title)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    title="Xóa đề mẫu"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+            ))}
+          </div>
 
-              <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  onClick={() => handleOpenAssign(tpl)}
-                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Giao bài ngay</span>
-                </button>
-
-                <button
-                  onClick={() => handleDelete(tpl.id, tpl.title)}
-                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                  title="Xóa đề mẫu"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+          {/* CỘT PHẢI: Trình xem PDF */}
+          <div className="w-full lg:w-2/3 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            {viewingTemplate ? (
+              <>
+                <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                    <FileText className="w-4 h-4 text-violet-600" />
+                    {viewingTemplate.title}
+                  </div>
+                  {viewingTemplate.pdfUrl ? (
+                    <span className="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">PDF Sẵn sàng</span>
+                  ) : (
+                    <span className="text-[11px] bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold">Không có PDF</span>
+                  )}
+                </div>
+                <div className="flex-1 bg-slate-200 relative">
+                  {viewingTemplate.pdfUrl ? (
+                    <iframe 
+                      src={`${viewingTemplate.pdfUrl}#toolbar=0`} 
+                      className="w-full h-full border-none"
+                      title="PDF Preview"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-400 flex-col">
+                      <FileText className="w-12 h-12 mb-2 opacity-50" />
+                      <p>Đề này chưa được đính kèm file PDF</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
+                <Eye className="w-12 h-12 mb-3 text-slate-300" />
+                <p className="font-medium">Chọn một đề thi bên trái để xem trước</p>
               </div>
-            </div>
-          ))}
+            )}
+          </div>
         </div>
       )}
 
-      {/* Modal Cấu hình Giao bài nhanh từ Kho */}
+      {/* Modal Cấu hình Giao bài nhanh từ Kho (Giữ nguyên của bạn) */}
       {showAssignModal && selectedTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
@@ -199,7 +254,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
                 <select
                   value={targetClassId}
                   onChange={(e) => setTargetClassId(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold outline-none focus:border-violet-500"
                 >
                   <option value="all">Toàn bộ học sinh (Tất cả)</option>
                   {classes.map(c => (
@@ -214,7 +269,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
                   type="number"
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold outline-none focus:border-violet-500"
                 />
               </div>
 
@@ -224,7 +279,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
                   type="date"
                   value={deadline}
                   onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold outline-none focus:border-violet-500"
                 />
               </div>
             </div>
@@ -232,7 +287,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
             <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
               <button
                 onClick={() => setShowAssignModal(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl"
+                className="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200"
               >
                 Hủy
               </button>
