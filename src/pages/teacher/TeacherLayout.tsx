@@ -6,6 +6,7 @@ import { TeacherAssignments } from './TeacherAssignments';
 import { TeacherCreateAssignment } from './TeacherCreateAssignment';
 import { TeacherResults } from './TeacherResults';
 import { TeacherSettings } from './TeacherSettings';
+import { ExamBankView } from './ExamBankView'; // MỚI: Import màn hình Kho Đề Mẫu
 import { 
   LayoutDashboard, 
   Users, 
@@ -13,7 +14,8 @@ import {
   PlusCircle, 
   BarChart3, 
   Settings,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 
 interface TeacherLayoutProps {
@@ -45,9 +47,10 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
 
   const navItems = [
     { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+    { id: 'exam_bank', label: 'Kho đề mẫu', icon: Layers, highlight: true }, // MỚI: Thêm tab Kho đề mẫu lên menu ngang
     { id: 'classes', label: 'Lớp học', icon: Users, badge: classes.length },
     { id: 'assignments', label: 'Bài tập', icon: BookOpen, badge: assignments.length },
-    { id: 'create', label: 'Tạo bài mới', icon: PlusCircle, highlight: true },
+    { id: 'create', label: 'Tạo bài mới', icon: PlusCircle },
     { id: 'results', label: 'Kết quả & Thống kê', icon: BarChart3 },
     { id: 'settings', label: 'Cài đặt', icon: Settings }
   ];
@@ -70,7 +73,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
                     isActive
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : item.highlight
-                      ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800'
+                      ? 'bg-violet-50 dark:bg-violet-950/70 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800'
                       : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
@@ -101,6 +104,14 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
             submissions={submissions}
             onNavigate={handleNavigate}
             onOpenShare={onOpenShare}
+          />
+        )}
+
+        {/* MỚI: Định tuyến hiển thị màn hình Kho đề mẫu */}
+        {activeTab === 'exam_bank' && (
+          <ExamBankView
+            classes={classes}
+            onNavigate={handleNavigate}
           />
         )}
 
