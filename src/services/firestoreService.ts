@@ -12,11 +12,12 @@ import {
   orderBy,
   serverTimestamp 
 } from '../firebase';
-import { Assignment, Submission, ClassRoom } from '../types';
+import { Assignment, Submission, ClassRoom, ExamTemplate } from '../types';
 
 export const EXAMS_COLLECTION = 'exams';
 export const RESULTS_COLLECTION = 'results';
 export const CLASSES_COLLECTION = 'classes';
+export const EXAM_TEMPLATES_COLLECTION = 'exam_templates'; // MỚI: Collection cho Kho Đề
 
 export class FirestoreService {
   /**
@@ -28,7 +29,7 @@ export class FirestoreService {
   ): Promise<void> {
     try {
       const examDocRef = doc(db, EXAMS_COLLECTION, assignment.id);
-      
+       
       const payload: any = {
         ...assignment,
         assignmentCode: assignment.assignmentCode.toUpperCase().trim(),
@@ -55,16 +56,15 @@ export class FirestoreService {
   static async getExamByCode(code: string): Promise<Assignment | null> {
     if (!code) return null;
     const cleanCode = code.trim().toUpperCase();
-    
+     
     try {
-      // Query collection "exams" where "assignmentCode" == cleanCode
       const q = query(
         collection(db, EXAMS_COLLECTION),
         where('assignmentCode', '==', cleanCode)
       );
 
       const querySnapshot = await getDocs(q);
-      
+       
       if (!querySnapshot.empty) {
         const docData = querySnapshot.docs[0].data() as Assignment;
         return {
@@ -73,7 +73,6 @@ export class FirestoreService {
         };
       }
 
-      // Fallback: check if doc ID itself is the code or starts with code
       const docRef = doc(db, EXAMS_COLLECTION, cleanCode);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
@@ -116,7 +115,7 @@ export class FirestoreService {
   static async saveResult(submission: Submission): Promise<void> {
     try {
       const resultDocRef = doc(db, RESULTS_COLLECTION, submission.id);
-      
+       
       const payload = {
         ...submission,
         createdAt: new Date().toISOString()
@@ -193,6 +192,85 @@ export class FirestoreService {
       console.log(`[Firestore] Đã xóa đề thi ${assignmentId} trên Cloud Firestore.`);
     } catch (error) {
       console.error('[Firestore Error] Lỗi xóa đề thi trên Firestore:', error);
+      throw error;
+    }
+  }
+
+  // ==========================================
+  // CÁC HÀM MỚI CHO KHO ĐỀ (EXAM TEMPLATES)
+  // ==========================================
+
+  /**
+   * Lưu một đề mẫu vào Kho Đề (exam_templates)
+   */
+  static async saveExamTemplate(
+    template: ExamTemplate,
+    teacherUser?: { uid: string; email?: string | null; displayName?: string | null }
+  ): Promise<void> {
+    try {
+      const templateDocRef = doc(db, EXAM_TEMPLATES_COLLECTION, template.id);
+      
+      const payload: any = {
+        ...template,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (teacherUser) {
+        payload.teacherId = teacherUser.uid;
+        payload.teacherEmail = teacherUser.email || '';
+        payload.teacherName = teacherUser.displayName || 'Giáo viên';
+      }
+
+      await setDoc(templateDocRef, payload, { merge: true });
+      console.log(`[Firestore] Đã lưu đề mẫu ${template.id} (${template.title}) vào Kho Đề.`);
+    } catch (error) {
+      console.error('[Firestore Error] Không thể lưu đề mẫu vào Kho Đề:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lấy danh sách toàn bộ đề mẫu trong Kho Đề (hỗ trợ lọc theo giáo viên)
+   */
+  static async getExamTemplates(teacherId?: string): Promise<ExamTemplate[]> {
+    try {
+      let q;
+      if (teacherId) {
+        q = query(
+          collection(db, EXAM_TEMPLATES_COLLECTION),
+          where('teacherId', '==', teacherId)
+        );
+      } else {
+        q = query(collection(db, EXAM_TEMPLATES_COLLECTION));
+      }
+
+      const querySnapshot = await getDocs(q);
+      const templates: ExamTemplate[] = [];
+      querySnapshot.forEach((docSnap) => {
+        templates.push({
+          ...(docSnap.data() as ExamTemplate),
+          id: docSnap.id
+        });
+      });
+      return templates;
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi tải danh sách Kho Đề:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Xóa một đề mẫu khỏi Kho Đề
+   */
+  static async deleteExamTemplate(templateId: string):Prompt<void> {
+    // Note: TypeScript fix -> Promise<void>
+  }
+  static async deleteExamTemplate(templateId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, EXAM_TEMPLATES_COLLECTION, templateId));
+      console.log(`[Firestore] Đã xóa đề mẫu ${templateId} khỏi Kho Đề.`);
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi xóa đề mẫu khỏi Kho Đề:', error);
       throw error;
     }
   }
