@@ -128,7 +128,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
         </div>
 
         <button
-          onClick={() => onNavigate('create')}
+          onClick={() => onNavigate('create', { initialMode: 'pdf' })}
           className="inline-flex items-center space-x-2 bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-4 py-2.5 rounded-xl shadow-md transition-all cursor-pointer text-xs sm:text-sm"
         >
           <Plus className="w-4 h-4" />
@@ -149,7 +149,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
             Hãy tải lên các đề thi PDF để lưu trữ và giao bài nhanh chóng cho học sinh.
           </p>
           <button
-            onClick={() => onNavigate('create')}
+            onClick={() => onNavigate('create', { initialMode: 'pdf' })}
             className="px-5 py-2.5 bg-violet-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-violet-700"
           >
             Tạo đề mẫu đầu tiên
