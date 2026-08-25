@@ -31,6 +31,7 @@ interface TeacherCreateAssignmentProps {
   initialQuestions?: Question[];
   initialTitle?: string;
   initialGrade?: GradeLevel;
+  initialMode?: 'text' | 'pdf'; // MỚI: Thêm prop nhận diện chế độ
   onSaveSuccess: (savedAssignment: Assignment) => void;
   onCancel: () => void;
 }
@@ -47,6 +48,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   initialQuestions,
   initialTitle,
   initialGrade,
+  initialMode, // MỚI: Nhận prop từ TeacherLayout
   onSaveSuccess,
   onCancel
 }) => {
@@ -69,7 +71,15 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   const [allowViewResult, setAllowViewResult] = useState<boolean>(true);
 
   // --- TAB MODE SWITCHER ---
-  const [examMode, setExamMode] = useState<'text' | 'pdf'>('text');
+  // Khởi tạo tab dựa trên tham số truyền vào
+  const [examMode, setExamMode] = useState<'text' | 'pdf'>(initialMode || 'text');
+
+  // Lắng nghe nếu initialMode thay đổi thì ép chuyển tab ngay lập tức
+  useEffect(() => {
+    if (initialMode) {
+      setExamMode(initialMode);
+    }
+  }, [initialMode]);
 
   // --- STATE DÀNH RIÊNG CHO CHẾ ĐỘ PDF ---
   const [pdfFile, setPdfFile] = useState<File | null>(null);
