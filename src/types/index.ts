@@ -40,6 +40,23 @@ export interface Question {
   topicHint?: string; // e.g. "Quy đồng mẫu số", "Rút gọn phân số"
 }
 
+// ==========================================
+// MỚI: BẢNG DỮ LIỆU KHO ĐỀ (EXAM TEMPLATE)
+// ==========================================
+export interface ExamTemplate {
+  id: string;
+  title: string;
+  grade: GradeLevel;
+  topic: string;
+  questions: Question[];
+  pdfUrl?: string; // Đường dẫn file PDF gốc trên Firebase Storage (để sau này làm màn hình chia đôi)
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// CẬP NHẬT: BÀI TẬP ĐÃ GIAO (ASSIGNMENT)
+// ==========================================
 export interface Assignment {
   id: string;
   title: string;
@@ -47,6 +64,8 @@ export interface Assignment {
   topic: string;
   classId: string; // Target class ID (or 'all')
   className?: string; // cached name
+  templateId?: string; // MỚI: ID của đề mẫu trong Kho Đề (nếu bài tập này được tạo từ Kho)
+  pdfUrl?: string; // MỚI: Đường dẫn file PDF gốc để hiển thị cho học sinh xem đề
   questions: Question[];
   durationMinutes: number; // 0 = unlimited, >0 = minutes limit
   deadline: string; // ISO date string or YYYY-MM-DD
