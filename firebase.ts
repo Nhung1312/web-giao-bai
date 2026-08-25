@@ -7,60 +7,22 @@ import {
   onAuthStateChanged,
   User 
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp 
-} from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
-export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+const firebaseConfig = {
+  apiKey: "AIzaSyCJaQgSfMYC1RqLeCXWT_SJrQWlLs7PSkg",
+  authDomain: "onluyenpro-53b11.firebaseapp.com",
+  projectId: "onluyenpro-53b11",
+  storageBucket: "onluyenpro-53b11.firebasestorage.app",
+  messagingSenderId: "271702658864",
+  appId: "1:271702658864:web:3356c5212459347dc9c2f5"
 };
 
-// Initialize Firebase app safely
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
-// Initialize Firebase Authentication & Firestore
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-
-// Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-export { 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp 
-};
+export { signInWithPopup, signOut, onAuthStateChanged, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp };
 export type { User };
-// Kích hoạt Build mới phá vỡ Cache Vercel
