@@ -64,7 +64,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   const draftStorageKey = `toan_thcs_draft_${assignment.id}_${encodeURIComponent(studentName)}`;
 
   // Chỉ bật chế độ 2 cột khi đề thi được đánh dấu chính xác là loại 'pdf'
-  // Đảm bảo không xung đột với tính năng bóc tách PDF thành Text
   const isPdfMode = (assignment as any).type === 'pdf';
 
   // 1. Restore draft if available from LocalStorage
@@ -141,12 +140,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   const questions = currentAssignment.questions || [];
   const currentQ = questions[currentIndex] || questions[0];
 
-  // Helper to trigger floating toast for anti-cheat warning
   const triggerAntiCheatToast = useCallback((msg: string) => {
     setAntiCheatToast({ message: msg, id: Date.now() });
   }, []);
 
-  // Auto clear anti-cheat toast after 2.8s
   useEffect(() => {
     if (!antiCheatToast) return;
     const timer = setTimeout(() => {
@@ -155,7 +152,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => clearTimeout(timer);
   }, [antiCheatToast]);
 
-  // Auto-save progress to LocalStorage
   const saveProgressToLocalStorage = useCallback(() => {
     try {
       const draft: ExamDraft = {
@@ -190,9 +186,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => clearInterval(saveInterval);
   }, [saveProgressToLocalStorage]);
 
-  // =========================================================================
-  // ANTI-CHEAT FEATURE 1: TAB SWITCH & WINDOW BLUR MONITORING
-  // =========================================================================
+  // ANTI-CHEAT FEATURE 1: TAB SWITCH
   useEffect(() => {
     let isAway = false;
     let awayStartTime = 0;
@@ -265,9 +259,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     };
   }, []);
 
-  // =========================================================================
-  // ANTI-CHEAT FEATURE 2: DISABLE RIGHT-CLICK, COPY, CUT, SELECTION, SHORTCUTS
-  // =========================================================================
+  // ANTI-CHEAT FEATURE 2: DISABLE SHORTCUTS
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -364,7 +356,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => clearInterval(timer);
   }, [totalSeconds]);
 
-  // Cập nhật hàm xử lý chọn đáp án để nhận id của câu hỏi (hỗ trợ chế độ PDF)
   const handleSelectOption = (qId: string, optionId: string) => {
     setAnswers(prev => ({
       ...prev,
@@ -508,15 +499,22 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
   const isCurrentFlagged = currentQ ? flaggedQuestions.includes(currentQ.id) : false;
 
-  return (
-    <div
-      className={`min-h-screen transition-all flex flex-col justify-between select-none ${
+  // Cấu hình CSS Root linh hoạt để KHÓA CUỘN TRANG với chế độ PDF
+  const rootContainerClasses = isPdfMode
+    ? `h-screen overflow-hidden flex flex-col select-none transition-all ${
+        isFocusMode
+          ? 'fixed inset-0 z-50 bg-slate-950 text-slate-100'
+          : 'bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100'
+      }`
+    : `min-h-screen flex flex-col justify-between select-none transition-all ${
         isFocusMode
           ? 'fixed inset-0 z-50 bg-slate-950 text-slate-100 overflow-y-auto'
           : 'bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-10'
-      }`}
-      style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
-    >
+      }`;
+
+  return (
+    <div className={rootContainerClasses} style={{ WebkitUserSelect: 'none', userSelect: 'none' }}>
+      
       {/* FLOATING ANTI-CHEAT WARNING TOAST */}
       {antiCheatToast && (
         <div className="fixed top-16 sm:top-5 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 animate-in slide-in-from-top-4 duration-200">
@@ -560,9 +558,9 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </div>
       )}
 
-      {/* TOP BAR / FOCUS HEADER (DÙNG CHUNG CHO CẢ PDF VÀ TEXT) */}
+      {/* TOP BAR / FOCUS HEADER */}
       <header
-        className={`sticky top-0 z-30 transition-colors border-b px-4 py-2.5 ${
+        className={`shrink-0 z-30 transition-colors border-b px-4 py-2.5 ${
           isFocusMode
             ? 'bg-slate-950/95 border-slate-800 backdrop-blur-md'
             : 'bg-white/95 dark:bg-slate-900/95 border-slate-200 dark:border-slate-800 shadow-xs backdrop-blur-md'
@@ -760,9 +758,11 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       {isPdfMode ? (
         
         // --- 1. GIAO DIỆN ĐỀ PDF (CHIA 2 CỘT) ---
-        <main className="w-full flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl mx-auto border-x border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        // SỬ DỤNG min-h-0 CHO FLEX-1 ĐỂ TRÁNH TRÀN CHIỀU CAO VÀ KÍCH HOẠT CUỘN ĐỘC LẬP
+        <main className="w-full flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl mx-auto border-x border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm min-h-0">
+          
           {/* CỘT TRÁI (65%): Trình xem đề thi PDF */}
-          <div className="w-full lg:w-[65%] h-[40vh] lg:h-auto relative border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-300 dark:bg-slate-950">
+          <div className="w-full lg:w-[65%] h-1/2 lg:h-full relative border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-300 dark:bg-slate-950">
             <iframe 
               src={`${assignment.pdfUrl}#toolbar=0`} 
               className="w-full h-full border-none"
@@ -771,7 +771,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
           </div>
 
           {/* CỘT PHẢI (35%): Phiếu điền đáp án Digital */}
-          <div className="w-full lg:w-[35%] flex flex-col h-full bg-white dark:bg-slate-900">
+          <div className="w-full lg:w-[35%] flex flex-col h-1/2 lg:h-full bg-white dark:bg-slate-900">
             <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex justify-between items-center shrink-0">
               <h2 className="font-extrabold text-slate-800 dark:text-slate-100">Phiếu Trả Lời Trắc Nghiệm</h2>
               <div className="flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200 dark:border-emerald-800">
@@ -780,7 +780,8 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
+            {/* VÙNG CUỘN ĐỘC LẬP BÊN PHẢI */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar min-h-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {questions.map((q, index) => {
                   const qNum = index + 1;
@@ -801,7 +802,6 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                       </div>
                       <div className="flex gap-1.5 sm:gap-2 justify-between">
                         {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
-                          // Lấy id thực sự của option nếu có, nếu không lấy chữ cái A,B,C,D
                           const optId = (q.options && q.options[optIdx]) ? q.options[optIdx].id : letter;
                           const isSelected = answers[q.id] === optId;
                           
@@ -841,8 +841,8 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
       ) : (
 
-        // --- 2. GIAO DIỆN ĐỀ TEXT (GIỮ NGUYÊN CODE CŨ CỦA BẠN) ---
-        <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1">
+        // --- 2. GIAO DIỆN ĐỀ TEXT (GIỮ NGUYÊN) ---
+        <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 min-h-0">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             
             {/* LEFT COLUMN: MAIN QUESTION CARD (lg:col-span-8 xl:col-span-9) */}
