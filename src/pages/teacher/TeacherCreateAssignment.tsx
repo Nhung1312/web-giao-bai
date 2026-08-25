@@ -22,7 +22,8 @@ import {
   UploadCloud,
   FileSpreadsheet,
   FileType,
-  Loader2
+  Loader2,
+  FileBadge
 } from 'lucide-react';
 
 interface TeacherCreateAssignmentProps {
@@ -67,7 +68,16 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   });
   const [allowViewResult, setAllowViewResult] = useState<boolean>(true);
 
-  // Question list state
+  // --- TAB MODE SWITCHER ---
+  const [examMode, setExamMode] = useState<'text' | 'pdf'>('text');
+
+  // --- STATE DÀNH RIÊNG CHO CHẾ ĐỘ PDF ---
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>('');
+  const [pdfNumQuestions, setPdfNumQuestions] = useState<number>(40);
+  const [pdfAnswers, setPdfAnswers] = useState<Record<number, string>>({});
+
+  // --- STATE CHẾ ĐỘ TEXT CŨ ---
   const [questions, setQuestions] = useState<Question[]>(() => {
     if (initialQuestions && initialQuestions.length > 0) {
       return initialQuestions;
@@ -100,6 +110,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   const [aiGenCount, setAiGenCount] = useState(5);
   const [importSuccessAlert, setImportSuccessAlert] = useState<string | null>(null);
 
+  // --- LOGIC XỬ LÝ TEXT MODE (GIỮ NGUYÊN) ---
   const handleAddQuestion = () => {
     const nextOrder = questions.length + 1;
     const newQ: Question = {
@@ -142,11 +153,8 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     handleUpdateQuestion(qIdx, { options: newOptions });
   };
 
-  // Handle File Upload Import
   const handleImportQuestionsFromFile = (importedQuestions: Question[]) => {
     if (!importedQuestions || importedQuestions.length === 0) return;
-
-    // If teacher currently only has 1 default placeholder question, replace it
     const isSingleDefault =
       questions.length === 1 &&
       (questions[0].question.includes('Tập hợp các số hữu tỉ') ||
@@ -164,13 +172,11 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
       }));
       finalQuestions = [...questions, ...reIndexed];
     }
-
     setQuestions(finalQuestions);
     setImportSuccessAlert(`Đã nhập thành công ${importedQuestions.length} câu hỏi từ tệp vào đề thi!`);
     setTimeout(() => setImportSuccessAlert(null), 4000);
   };
 
-  // AI Generator Hook
   const handleAiGenerateQuestions = async () => {
     setIsAiGenerating(true);
     try {
@@ -193,7 +199,6 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     }
   };
 
-  // Raw text parser hook
   const handleImportFromText = async () => {
     if (!rawTextImport.trim()) return;
     const parsed = await aiService.parseQuestionsFromText(rawTextImport);
@@ -210,6 +215,22 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     }
   };
 
+  // --- LOGIC XỬ LÝ PDF MODE ---
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setPdfFile(file);
+      setPdfPreviewUrl(URL.createObjectURL(file));
+    } else {
+      alert('Vui lòng tải lên file định dạng PDF hợp lệ.');
+    }
+  };
+
+  const handleSelectPdfAnswer = (qIndex: number, option: string) => {
+    setPdfAnswers(prev => ({ ...prev, [qIndex]: option }));
+  };
+
+  // --- LƯU BÀI TẬP (GỘP CHUNG 2 CHẾ ĐỘ) ---
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -217,22 +238,63 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
       return;
     }
 
-    // Validate questions
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      if (!q.question.trim()) {
-        alert(`Câu hỏi số ${i + 1} chưa nhập nội dung.`);
-        return;
-      }
-      
-      // CHỈ bắt lỗi đáp án trống đối với dạng câu TRẮC NGHIỆM
-      if (q.type === 'multiple_choice') {
-        const hasEmptyOpt = q.options.some(o => !o.text.trim());
-        if (hasEmptyOpt) {
-          alert(`Câu hỏi số ${i + 1} còn phương án lựa chọn bị trống.`);
+    let finalQuestions: Question[] = [];
+    let finalType: 'text' | 'pdf' = 'text';
+    let finalPdfUrl: string | undefined = undefined;
+
+    // VALIDATE VÀ BUILD DỮ LIỆU CHẾ ĐỘ TEXT
+    if (examMode === 'text') {
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        if (!q.question.trim()) {
+          alert(`Câu hỏi số ${i + 1} chưa nhập nội dung.`);
           return;
         }
+        if (q.type === 'multiple_choice') {
+          const hasEmptyOpt = q.options.some(o => !o.text.trim());
+          if (hasEmptyOpt) {
+            alert(`Câu hỏi số ${i + 1} còn phương án lựa chọn bị trống.`);
+            return;
+          }
+        }
       }
+      finalQuestions = questions;
+      finalType = 'text';
+    } 
+    // VALIDATE VÀ BUILD DỮ LIỆU CHẾ ĐỘ PDF
+    else {
+      if (!pdfFile && !pdfPreviewUrl) {
+        alert('Vui lòng tải lên file PDF đề thi.');
+        return;
+      }
+      if (Object.keys(pdfAnswers).length === 0) {
+        if (!window.confirm('Bạn chưa thiết lập bảng đáp án nào. Vẫn tiếp tục lưu?')) return;
+      }
+      
+      finalType = 'pdf';
+      
+      // Chú ý: Ở hệ thống thực tế, bạn sẽ cần thay hàm tạo URL Local này 
+      // bằng hàm upload file PDF lên Firebase Storage và lấy link tải về.
+      finalPdfUrl = pdfPreviewUrl; 
+      
+      // Tự động sinh mảng questions "ảo" để hệ thống chấm điểm dựa vào bảng đáp án
+      const pointPerQuestion = Number((10 / pdfNumQuestions).toFixed(2));
+      finalQuestions = Array.from({ length: pdfNumQuestions }).map((_, i) => ({
+        id: `q_pdf_${Date.now()}_${i + 1}`,
+        order: i + 1,
+        question: `Câu ${i + 1}`,
+        type: 'multiple_choice',
+        options: [
+          { id: 'A', text: 'A' },
+          { id: 'B', text: 'B' },
+          { id: 'C', text: 'C' },
+          { id: 'D', text: 'D' }
+        ],
+        correctAnswer: pdfAnswers[i + 1] || 'A', // Lấy đáp án giáo viên đã tick
+        points: pointPerQuestion,
+        explanation: '',
+        topicHint: topic
+      }));
     }
 
     setIsSaving(true);
@@ -242,34 +304,36 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
       const className = targetClass ? targetClass.name : 'Toàn khối';
       const assignmentCode = StorageService.generateAssignmentCode(grade, className);
 
-      const newAssignment: Assignment = {
+      const newAssignment: any = {
         id: `asg_${Date.now()}`,
         title: title.trim(),
         grade,
         topic: topic.trim(),
         classId,
         className,
-        questions,
+        questions: finalQuestions,
         durationMinutes,
         deadline,
         allowViewResult,
         assignmentCode,
         createdAt: new Date().toISOString(),
-        isPublished: true
+        isPublished: true,
+        type: finalType, // Ép cờ type = pdf hoặc text
+        pdfUrl: finalPdfUrl
       };
 
       // 1. Save to Cloud Firestore
       try {
-        await FirestoreService.saveExam(newAssignment, user || undefined);
+        await FirestoreService.saveExam(newAssignment as Assignment, user || undefined);
       } catch (firestoreErr) {
         console.warn('Lưu Firestore thất bại, lưu dự phòng LocalStorage:', firestoreErr);
       }
 
       // 2. Save to Local Cache
-      StorageService.saveAssignment(newAssignment);
+      StorageService.saveAssignment(newAssignment as Assignment);
 
       setIsSaving(false);
-      onSaveSuccess(newAssignment);
+      onSaveSuccess(newAssignment as Assignment);
     } catch (err) {
       console.error('Lỗi khi lưu đề thi:', err);
       setIsSaving(false);
@@ -284,7 +348,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">Tạo bài tập & Đề kiểm tra mới</h1>
           <p className="text-sm text-slate-500">
-            Soạn câu hỏi trắc nghiệm Toán THCS, thiết lập đáp án đúng và thời gian làm bài.
+            Soạn đề thi linh hoạt qua việc nhập từng câu hoặc tải file PDF.
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -316,7 +380,8 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-8">
+      <form onSubmit={handleSave} className="space-y-6">
+        
         {/* Section 1: General Assignment Info */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
           <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
@@ -430,236 +495,353 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
           </div>
         </div>
 
-        {/* Section 2: Question Builder & Tools */}
-        <div className="space-y-4">
-          {importSuccessAlert && (
-            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900 text-sm font-semibold flex items-center space-x-2 animate-in fade-in duration-150">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>{importSuccessAlert}</span>
+        {/* --- CÔNG TẮC CHUYỂN CHẾ ĐỘ TEXT / PDF --- */}
+        <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-fit border border-slate-200 shadow-inner">
+          <button
+            type="button"
+            onClick={() => setExamMode('text')}
+            className={`flex items-center justify-center space-x-2 flex-1 sm:flex-none sm:px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              examMode === 'text' 
+                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Chế độ nhập câu hỏi</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setExamMode('pdf')}
+            className={`flex items-center justify-center space-x-2 flex-1 sm:flex-none sm:px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              examMode === 'pdf' 
+                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <FileBadge className="w-4 h-4" />
+            <span>Chế độ Tải đề PDF</span>
+          </button>
+        </div>
+
+        {/* ==========================================
+            HIỂN THỊ DỰA TRÊN CHẾ ĐỘ ĐƯỢC CHỌN 
+            ========================================== */}
+        
+        {examMode === 'text' ? (
+          /* SECTION 2: CHẾ ĐỘ TEXT TRUYỀN THỐNG */
+          <div className="space-y-4">
+            {importSuccessAlert && (
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900 text-sm font-semibold flex items-center space-x-2 animate-in fade-in duration-150">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>{importSuccessAlert}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black">
+                  2
+                </span>
+                Ngân hàng câu hỏi ({questions.length} câu)
+              </h2>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFileUploadModal(true)}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all active:scale-95"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Tải lên file (Excel / Word / PDF bóc tách)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAiGenModal(true)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-2 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl shadow-2xs transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Sinh câu hỏi gợi ý</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowRawImportModal(true)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Dán đề text</span>
+                </button>
+              </div>
             </div>
-          )}
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black">
-                2
-              </span>
-              Ngân hàng câu hỏi ({questions.length} câu)
-            </h2>
+            {/* Questions List */}
+            <div className="space-y-4">
+              {questions.map((q, qIdx) => (
+                <div
+                  key={q.id}
+                  className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4"
+                >
+                  {/* Question Header */}
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center space-x-3">
+                      <span className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center">
+                        {qIdx + 1}
+                      </span>
+                      <span className="font-bold text-sm text-slate-800">Câu hỏi số {qIdx + 1}</span>
+                      
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        q.type === 'multiple_choice' 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {q.type === 'multiple_choice' ? 'TRẮC NGHIỆM' : 'TỰ LUẬN'}
+                      </span>
+                    </div>
 
-            {/* Quick Generator & Import Buttons */}
-            <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-1">
+                        <span className="text-xs text-slate-500 font-medium">Điểm:</span>
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0.25"
+                          max="10"
+                          value={q.points}
+                          onChange={(e) => handleUpdateQuestion(qIdx, { points: Number(e.target.value) })}
+                          className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQuestion(qIdx)}
+                        className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                        title="Xóa câu hỏi"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Question Text */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        Nội dung câu hỏi *
+                      </label>
+                      <span className="text-[11px] text-indigo-600 font-semibold">
+                        {'Hỗ trợ LaTeX: $...$ (inline) hoặc $$...$$ (block)'}
+                      </span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={q.question}
+                      onChange={(e) => handleUpdateQuestion(qIdx, { question: e.target.value })}
+                      placeholder="Nhập đề bài Toán..."
+                      className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                    {q.question.trim() && (
+                      <div className="mt-2 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-sm">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-indigo-700 mb-1">
+                          Xem trước hiển thị:
+                        </div>
+                        <MathDisplay text={q.question} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Options */}
+                  {q.type === 'multiple_choice' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2">
+                        Các lựa chọn & Đáp án đúng <span className="text-indigo-600">(Chọn nút tròn để làm đáp án)</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {q.options.map((opt) => {
+                          const isCorrect = q.correctAnswer === opt.id;
+                          return (
+                            <div
+                              key={opt.id}
+                              className={`flex items-center p-2 rounded-2xl border-2 transition-all ${
+                                isCorrect ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-slate-50/70'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateQuestion(qIdx, { correctAnswer: opt.id })}
+                                className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center mr-2 shrink-0 transition-colors ${
+                                  isCorrect ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                                }`}
+                              >
+                                {opt.id}
+                              </button>
+                              <input
+                                type="text"
+                                value={opt.text}
+                                onChange={(e) => handleUpdateOption(qIdx, opt.id, e.target.value)}
+                                placeholder={`Phương án ${opt.id}...`}
+                                className="flex-1 bg-white px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                                required
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Explanation */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Lời giải chi tiết</label>
+                      <input
+                        type="text"
+                        value={q.explanation || ''}
+                        onChange={(e) => handleUpdateQuestion(qIdx, { explanation: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Dạng bài / Kỹ năng</label>
+                      <input
+                        type="text"
+                        value={q.topicHint || ''}
+                        onChange={(e) => handleUpdateQuestion(qIdx, { topicHint: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-center pt-2">
               <button
                 type="button"
-                onClick={() => setShowFileUploadModal(true)}
-                className="inline-flex items-center space-x-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all active:scale-95"
+                onClick={handleAddQuestion}
+                className="inline-flex items-center space-x-2 px-6 py-3 bg-white hover:bg-slate-50 text-indigo-600 font-bold rounded-2xl border-2 border-dashed border-indigo-300 hover:border-indigo-500 shadow-xs transition-all active:scale-98"
               >
-                <UploadCloud className="w-4 h-4" />
-                <span>Tải lên file (Excel / Word / PDF)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowAiGenModal(true)}
-                className="inline-flex items-center space-x-1.5 px-3 py-2 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl shadow-2xs transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                <span>Sinh câu hỏi gợi ý</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowRawImportModal(true)}
-                className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Dán đề text</span>
+                <Plus className="w-5 h-5" />
+                <span>+ THÊM CÂU HỎI TRẮC NGHIỆM</span>
               </button>
             </div>
           </div>
+        ) : (
+          /* SECTION 2: CHẾ ĐỘ PDF */
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+            <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2 mb-6">
+              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black">
+                2
+              </span>
+              Tải Đề PDF & Bảng đáp án kỹ thuật số
+            </h2>
 
-          {/* Questions List */}
-          <div className="space-y-4">
-            {questions.map((q, qIdx) => (
-              <div
-                key={q.id}
-                className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4"
-              >
-                {/* Question Header */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center space-x-3">
-                    <span className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center">
-                      {qIdx + 1}
-                    </span>
-                    <span className="font-bold text-sm text-slate-800">Câu hỏi số {qIdx + 1}</span>
-                    
-                    {/* NHÃN PHÂN LOẠI TRẮC NGHIỆM / TỰ LUẬN */}
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      q.type === 'multiple_choice' 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {q.type === 'multiple_choice' ? 'TRẮC NGHIỆM' : 'TỰ LUẬN'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    {/* Points */}
-                    <div className="flex items-center space-x-1">
-                      <span className="text-xs text-slate-500 font-medium">Điểm:</span>
-                      <input
-                        type="number"
-                        step="0.25"
-                        min="0.25"
-                        max="10"
-                        value={q.points}
-                        onChange={(e) => handleUpdateQuestion(qIdx, { points: Number(e.target.value) })}
-                        className="w-16 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-center"
-                      />
-                    </div>
-
-                    {/* Delete Question */}
-                    <button
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+              {/* Khu vực Upload PDF */}
+              <div className="flex flex-col h-[550px]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-slate-800 text-sm">1. Tải lên file PDF gốc</h3>
+                </div>
+                
+                {pdfPreviewUrl ? (
+                  <div className="flex-1 border-2 border-slate-200 rounded-2xl overflow-hidden bg-slate-100 relative group">
+                    <iframe src={`${pdfPreviewUrl}#toolbar=0`} className="w-full h-full border-none" title="PDF Preview" />
+                    <button 
                       type="button"
-                      onClick={() => handleRemoveQuestion(qIdx)}
-                      className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                      title="Xóa câu hỏi"
+                      onClick={() => { setPdfFile(null); setPdfPreviewUrl(''); }}
+                      className="absolute top-3 right-3 bg-white/90 p-2 rounded-lg text-rose-600 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-50"
+                      title="Xóa và chọn file khác"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
-
-                {/* Question Text */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">
-                      Nội dung câu hỏi *
-                    </label>
-                    <span className="text-[11px] text-indigo-600 font-semibold">
-                      {'Hỗ trợ LaTeX: $...$ (inline) hoặc $$...$$ (block), phân số 2/5, căn √25, góc \\widehat{ABC}'}
-                    </span>
-                  </div>
-                  <textarea
-                    rows={2}
-                    value={q.question}
-                    onChange={(e) => handleUpdateQuestion(qIdx, { question: e.target.value })}
-                    placeholder="Nhập đề bài Toán. Ví dụ: Tính giá trị biểu thức $\frac{2}{5} + \frac{3}{5}$ hoặc $\sqrt{2x-6}$..."
-                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                    required
-                  />
-
-                  {/* Live Render Preview */}
-                  {q.question.trim() && (
-                    <div className="mt-2 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-sm">
-                      <div className="text-[10px] uppercase font-black tracking-wider text-indigo-700 mb-1">
-                        Xem trước hiển thị chuẩn KaTeX:
-                      </div>
-                      <MathDisplay text={q.question} />
+                ) : (
+                  <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 transition-colors cursor-pointer p-6 text-center">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4 text-indigo-500">
+                      <FileBadge className="w-8 h-8" />
                     </div>
-                  )}
-                </div>
-
-                {/* 4 Options Grid - CHỈ HIỂN THỊ NẾU LÀ TRẮC NGHIỆM */}
-                {q.type === 'multiple_choice' && (
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">
-                      Các lựa chọn & Đáp án đúng <span className="text-indigo-600">(Chọn nút tròn để đánh dấu đáp án đúng)</span>
-                    </label>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {q.options.map((opt) => {
-                        const isCorrect = q.correctAnswer === opt.id;
-                        return (
-                          <div
-                            key={opt.id}
-                            className={`flex items-center p-2 rounded-2xl border-2 transition-all ${
-                              isCorrect
-                                ? 'border-emerald-500 bg-emerald-50/50'
-                                : 'border-slate-200 bg-slate-50/70'
-                            }`}
-                          >
-                            {/* Radio choice */}
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateQuestion(qIdx, { correctAnswer: opt.id })}
-                              className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center mr-2 shrink-0 transition-colors ${
-                                isCorrect
-                                  ? 'bg-emerald-600 text-white shadow-xs'
-                                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
-                              }`}
-                              title="Chọn làm đáp án đúng"
-                            >
-                              {opt.id}
-                            </button>
-
-                            {/* Option Input */}
-                            <input
-                              type="text"
-                              value={opt.text}
-                              onChange={(e) => handleUpdateOption(qIdx, opt.id, e.target.value)}
-                              placeholder={`Phương án ${opt.id}...`}
-                              className="flex-1 bg-white px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                              required
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    <span className="text-sm font-bold text-slate-700 mb-1">Click để tải lên file Đề thi</span>
+                    <span className="text-xs text-slate-500">Chỉ hỗ trợ định dạng .PDF</span>
+                    <input 
+                      type="file" 
+                      accept=".pdf" 
+                      onChange={handlePdfUpload}
+                      className="hidden" 
+                    />
+                  </label>
                 )}
+              </div>
 
-                {/* Explanation & Topic hint */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Lời giải chi tiết (Hiện khi học sinh xem lại)
-                    </label>
-                    <input
-                      type="text"
-                      value={q.explanation || ''}
-                      onChange={(e) => handleUpdateQuestion(qIdx, { explanation: e.target.value })}
-                      placeholder="Giải thích từng bước giải bài..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+              {/* Khu vực Grid Đáp án */}
+              <div className="flex flex-col h-[550px]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-slate-800 text-sm">2. Thiết lập bảng đáp án</h3>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-slate-500">Số câu:</label>
+                    <input 
+                      type="number" 
+                      value={pdfNumQuestions} 
+                      onChange={(e) => setPdfNumQuestions(Number(e.target.value))}
+                      className="w-16 border-2 border-slate-200 rounded-lg p-1.5 text-center text-sm font-bold focus:border-indigo-500 focus:outline-none" 
+                      min={1} max={100}
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Dạng bài / Kỹ năng
-                    </label>
-                    <input
-                      type="text"
-                      value={q.topicHint || ''}
-                      onChange={(e) => handleUpdateQuestion(qIdx, { topicHint: e.target.value })}
-                      placeholder="Ví dụ: Rút gọn phân số, Cộng trừ cùng mẫu..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                    />
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3 border-2 border-slate-200 rounded-2xl bg-slate-50 custom-scrollbar">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {Array.from({ length: pdfNumQuestions }).map((_, i) => {
+                      const qNum = i + 1;
+                      return (
+                        <div key={qNum} className="flex flex-col bg-white p-2.5 border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 transition-colors">
+                          <span className="text-[11px] font-black text-slate-400 mb-1.5">Câu {qNum}</span>
+                          <div className="flex justify-between gap-1">
+                            {['A', 'B', 'C', 'D'].map(opt => (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => handleSelectPdfAnswer(qNum, opt)}
+                                className={`flex-1 aspect-square max-h-8 rounded-lg text-xs font-black transition-all ${
+                                  pdfAnswers[qNum] === opt 
+                                    ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-200' 
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
+                <div className="text-xs font-semibold text-slate-500 text-right mt-3">
+                  Đã cấu hình: <strong className="text-indigo-600">{Object.keys(pdfAnswers).length}</strong> / {pdfNumQuestions} câu
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-
-          {/* Add Question Button */}
-          <div className="flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={handleAddQuestion}
-              className="inline-flex items-center space-x-2 px-6 py-3 bg-white hover:bg-slate-50 text-indigo-600 font-bold rounded-2xl border-2 border-dashed border-indigo-300 hover:border-indigo-500 shadow-xs transition-all active:scale-98"
-            >
-              <Plus className="w-5 h-5" />
-              <span>+ THÊM CÂU HỎI TRẮC NGHIỆM</span>
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Bottom Save Bar */}
         <div className="sticky bottom-4 z-20 bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200 shadow-xl flex items-center justify-between">
           <div className="text-xs font-medium text-slate-600">
-            Tổng cộng: <strong className="text-indigo-600">{questions.length}</strong> câu hỏi • Tổng điểm:{' '}
-            <strong className="text-slate-900">
-              {questions.reduce((sum, q) => sum + (q.points || 0), 0)}
-            </strong>
+            {examMode === 'text' ? (
+              <>
+                Tổng cộng: <strong className="text-indigo-600">{questions.length}</strong> câu hỏi • Tổng điểm:{' '}
+                <strong className="text-slate-900">
+                  {questions.reduce((sum, q) => sum + (q.points || 0), 0)}
+                </strong>
+              </>
+            ) : (
+              <>
+                Đề PDF: <strong className="text-indigo-600">{pdfNumQuestions}</strong> câu • Điểm chia đều:{' '}
+                <strong className="text-slate-900">10 điểm</strong>
+              </>
+            )}
           </div>
           <button
             type="submit"
@@ -681,7 +863,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         </div>
       </form>
 
-      {/* Modal: AI Question Generator */}
+      {/* --- CÁC MODAL HỖ TRỢ CHẾ ĐỘ TEXT --- */}
       {showAiGenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100">
@@ -742,7 +924,6 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         </div>
       )}
 
-      {/* Modal: Raw Text Import */}
       {showRawImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 w-full max-w-xl shadow-2xl border border-slate-100">
@@ -784,7 +965,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         </div>
       )}
 
-      {/* Modal: File Upload (Excel, Word, PDF) with Category Filter (Trắc nghiệm / Tự luận) */}
+      {/* Modal: File Upload (Excel, Word, PDF bóc tách) */}
       <FileUploadModal
         isOpen={showFileUploadModal}
         onClose={() => setShowFileUploadModal(false)}
