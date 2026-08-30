@@ -1,9 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { Assignment, ClassRoom, Submission, QuestionAnalysis } from '../../types';
+import { Assignment, ClassRoom, Submission, QuestionAnalysis, StudentAnswer } from '../../types';
 import { GradingService } from '../../services/gradingService';
 import { aiService } from '../../services/aiService';
+import { StorageService } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
 import { MathDisplay } from '../../components/MathDisplay';
 import { PrintExamModal } from '../../components/PrintExamModal';
+import { ImageLightboxModal } from '../../components/ImageLightboxModal';
+import { isEssayQuestion, getQuestionTypeLabel } from '../../utils/questionUtils';
 import { 
   BarChart3, 
   Users, 
@@ -16,18 +20,22 @@ import {
   XCircle, 
   Sparkles, 
   Download,
-  BookOpen,
-  Filter,
-  Eye,
-  Printer,
-  Medal,
-  Award,
-  Flame,
-  Target,
-  Share2,
-  ShieldCheck,
-  ShieldAlert,
-  Shuffle
+  BookOpen, 
+  Filter, 
+  Eye, 
+  Printer, 
+  Medal, 
+  Award, 
+  Flame, 
+  Target, 
+  Share2, 
+  ShieldCheck, 
+  ShieldAlert, 
+  Shuffle,
+  Camera,
+  Edit3,
+  Save,
+  Check
 } from 'lucide-react';
 
 interface TeacherResultsProps {
@@ -62,6 +70,13 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
     recommendations: string[];
   } | null>(null);
   const [loadingAiReport, setLoadingAiReport] = useState(false);
+
+  // Essay Grading & Review in Detail Modal
+  const [gradingAiInProgress, setGradingAiInProgress] = useState<Record<string, boolean>>({});
+  const [teacherScoreInput, setTeacherScoreInput] = useState<Record<string, number>>({});
+  const [teacherFeedbackInput, setTeacherFeedbackInput] = useState<Record<string, string>>({});
+  const [savedGradeSuccess, setSavedGradeSuccess] = useState<Record<string, boolean>>({});
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
   const currentAssignment = assignments.find(a => a.id === selectedAsgId) || assignments[0];
   const targetClass = currentAssignment ? classes.find(c => c.id === currentAssignment.classId) : null;
@@ -154,6 +169,122 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
     } finally {
       setLoadingAiReport(false);
     }
+  };
+
+  // On-demand AI Essay Grading for a single question
+  const handleAiGradeSingleQuestion = async (ans: StudentAnswer, question: any) => {
+    if (!selectedSubmissionDetail || !currentAssignment) return;
+    setGradingAiInProgress(prev => ({ ...prev, [ans.questionId]: true }));
+    try {
+      const res = await aiService.gradeEssay({
+        questionText: question.question,
+        studentAnswerText: ans.studentSolutionText || '',
+        essayImages: ans.essayImages || [],
+        maxPoints: question.points,
+        correctAnswerCriteria: question.correctAnswer,
+        rubric: question.rubric,
+        grade: currentAssignment.grade,
+        topicHint: question.topicHint
+      });
+
+      const updatedAnswers = selectedSubmissionDetail.answers.map(a => {
+        if (a.questionId === ans.questionId) {
+          const isCorrect = res.score >= (question.points * 0.5);
+          return {
+            ...a,
+            pointsEarned: res.score,
+            isCorrect,
+            aiScore: res.score,
+            aiFeedback: res.feedback,
+            aiGraded: true
+          };
+        }
+        return a;
+      });
+
+      // Recalculate total score
+      let totalEarned = 0;
+      let totalMax = 0;
+      let correctCnt = 0;
+      let wrongCnt = 0;
+      updatedAnswers.forEach(a => {
+        const q = currentAssignment.questions.find(item => item.id === a.questionId);
+        const max = q ? q.points : (a.maxPoints || 1);
+        totalMax += max;
+        totalEarned += (a.teacherScore !== undefined ? a.teacherScore : a.pointsEarned);
+        if (a.isCorrect) correctCnt++; else wrongCnt++;
+      });
+      const rawScore = totalMax > 0 ? (totalEarned / totalMax) * 10 : 0;
+      const totalScore = Math.round(rawScore * 10) / 10;
+
+      const updatedSubmission: Submission = {
+        ...selectedSubmissionDetail,
+        answers: updatedAnswers,
+        totalScore,
+        correctCount: correctCnt,
+        wrongCount: wrongCnt
+      };
+
+      setSelectedSubmissionDetail(updatedSubmission);
+      StorageService.saveSubmission(updatedSubmission);
+      FirestoreService.saveResult(updatedSubmission).catch(() => {});
+    } catch (e) {
+      alert('Lỗi chấm bài bằng AI.');
+    } finally {
+      setGradingAiInProgress(prev => ({ ...prev, [ans.questionId]: false }));
+    }
+  };
+
+  // Teacher manual override score and comment
+  const handleSaveTeacherManualGrade = (ans: StudentAnswer, question: any) => {
+    if (!selectedSubmissionDetail || !currentAssignment) return;
+    const scoreVal = teacherScoreInput[ans.questionId] !== undefined ? teacherScoreInput[ans.questionId] : (ans.teacherScore !== undefined ? ans.teacherScore : ans.pointsEarned);
+    const fbVal = teacherFeedbackInput[ans.questionId] !== undefined ? teacherFeedbackInput[ans.questionId] : (ans.teacherFeedback || '');
+
+    const updatedAnswers = selectedSubmissionDetail.answers.map(a => {
+      if (a.questionId === ans.questionId) {
+        const isCorrect = scoreVal >= (question.points * 0.5);
+        return {
+          ...a,
+          pointsEarned: scoreVal,
+          teacherScore: scoreVal,
+          teacherFeedback: fbVal,
+          isCorrect
+        };
+      }
+      return a;
+    });
+
+    let totalEarned = 0;
+    let totalMax = 0;
+    let correctCnt = 0;
+    let wrongCnt = 0;
+    updatedAnswers.forEach(a => {
+      const q = currentAssignment.questions.find(item => item.id === a.questionId);
+      const max = q ? q.points : (a.maxPoints || 1);
+      totalMax += max;
+      totalEarned += (a.teacherScore !== undefined ? a.teacherScore : a.pointsEarned);
+      if (a.isCorrect) correctCnt++; else wrongCnt++;
+    });
+    const rawScore = totalMax > 0 ? (totalEarned / totalMax) * 10 : 0;
+    const totalScore = Math.round(rawScore * 10) / 10;
+
+    const updatedSubmission: Submission = {
+      ...selectedSubmissionDetail,
+      answers: updatedAnswers,
+      totalScore,
+      correctCount: correctCnt,
+      wrongCount: wrongCnt
+    };
+
+    setSelectedSubmissionDetail(updatedSubmission);
+    StorageService.saveSubmission(updatedSubmission);
+    FirestoreService.saveResult(updatedSubmission).catch(() => {});
+
+    setSavedGradeSuccess(prev => ({ ...prev, [ans.questionId]: true }));
+    setTimeout(() => {
+      setSavedGradeSuccess(prev => ({ ...prev, [ans.questionId]: false }));
+    }, 2500);
   };
 
   // Export CSV
@@ -1066,22 +1197,64 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
               )}
             </div>
 
+            {/* General Exam Paper/Scratch Photos (if attached in PDF mode) */}
+            {selectedSubmissionDetail.essayImages && selectedSubmissionDetail.essayImages.length > 0 && (
+              <div className="mb-4 p-4 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-purple-900 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-purple-600" />
+                    <span>Ảnh bài làm đính kèm chung ({selectedSubmissionDetail.essayImages.length} ảnh):</span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {selectedSubmissionDetail.essayImages.map((img, iIdx) => (
+                    <div
+                      key={iIdx}
+                      onClick={() => setLightboxImageUrl(img)}
+                      className="group relative rounded-xl overflow-hidden border border-purple-300 aspect-4/3 cursor-pointer bg-white"
+                    >
+                      <img src={img} alt={`Bài làm ${iIdx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Eye className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4">
               {selectedSubmissionDetail.answers.map((ans) => {
                 const question = currentAssignment.questions.find(q => q.id === ans.questionId);
                 if (!question) return null;
 
+                const isEssay = isEssayQuestion(question);
+                const isCorrect = ans.isCorrect;
+                const images = ans.essayImages || [];
+                const isLoadingAI = !!gradingAiInProgress[ans.questionId];
+                const isSaved = !!savedGradeSuccess[ans.questionId];
+
+                const currentScore = teacherScoreInput[ans.questionId] !== undefined
+                  ? teacherScoreInput[ans.questionId]
+                  : (ans.teacherScore !== undefined ? ans.teacherScore : ans.pointsEarned);
+
+                const currentFeedback = teacherFeedbackInput[ans.questionId] !== undefined
+                  ? teacherFeedbackInput[ans.questionId]
+                  : (ans.teacherFeedback || '');
+
                 return (
                   <div
                     key={ans.questionId}
                     className={`p-4 rounded-2xl border ${
-                      ans.isCorrect ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20'
+                      isCorrect ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-xs font-bold mb-1">
-                      <span className="text-slate-700">Câu {question.order}</span>
-                      <span className={ans.isCorrect ? 'text-emerald-700' : 'text-rose-700'}>
-                        {ans.isCorrect ? '✓ Đúng (+ ' + ans.pointsEarned + 'đ)' : '✗ Sai (0đ)'}
+                    <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+                      <span className="text-slate-700">
+                        Câu {question.order} • {getQuestionTypeLabel(question)} ({question.points} điểm)
+                      </span>
+                      <span className={isCorrect ? 'text-emerald-700 font-extrabold' : 'text-rose-700 font-extrabold'}>
+                        {isCorrect ? `✓ Đúng (+${ans.pointsEarned}đ)` : `✗ Chưa đạt (+${ans.pointsEarned}/${question.points}đ)`}
                       </span>
                     </div>
 
@@ -1089,14 +1262,125 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
                       <MathDisplay text={question.question} />
                     </div>
 
-                    <div className="text-xs text-slate-600 flex items-center gap-4">
-                      <span>
-                        Học sinh chọn: <strong className="text-indigo-700">{ans.selectedAnswer || '(Bỏ trống)'}</strong>
-                      </span>
-                      <span>
-                        Đáp án đúng: <strong className="text-emerald-700">{question.correctAnswer}</strong>
-                      </span>
-                    </div>
+                    {/* Multiple choice response */}
+                    {!isEssay && (
+                      <div className="text-xs text-slate-600 flex items-center gap-4 bg-white/70 p-2.5 rounded-xl border border-slate-100 mb-2">
+                        <span>
+                          Học sinh chọn: <strong className="text-indigo-700">{ans.selectedAnswer || '(Bỏ trống)'}</strong>
+                        </span>
+                        <span>
+                          Đáp án đúng: <strong className="text-emerald-700">{question.correctAnswer}</strong>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Essay: Typed text solution */}
+                    {ans.studentSolutionText && (
+                      <div className="mb-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-0.5">
+                        <div className="font-bold text-slate-700">📝 Lời giải học sinh gõ:</div>
+                        <div className="font-mono text-slate-800 whitespace-pre-line pl-1">{ans.studentSolutionText}</div>
+                      </div>
+                    )}
+
+                    {/* Essay: Uploaded photos */}
+                    {images.length > 0 && (
+                      <div className="mb-2 p-2.5 bg-purple-50/60 border border-purple-200 rounded-xl space-y-1.5">
+                        <div className="font-bold text-xs text-purple-900 flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Ảnh bài làm tự luận ({images.length} ảnh):</span>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {images.map((img, iIdx) => (
+                            <div
+                              key={iIdx}
+                              onClick={() => setLightboxImageUrl(img)}
+                              className="group relative rounded-lg overflow-hidden border border-purple-300 aspect-4/3 cursor-pointer bg-white"
+                            >
+                              <img src={img} alt={`Ảnh ${iIdx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Eye className="w-4 h-4 text-white" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* AI Grading result */}
+                    {ans.aiGraded && (
+                      <div className="mb-2 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-950 space-y-1">
+                        <div className="flex items-center justify-between font-extrabold text-indigo-900">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Gemini AI chấm: {ans.aiScore}/{question.points} điểm</span>
+                          </span>
+                        </div>
+                        <p className="leading-relaxed whitespace-pre-line text-indigo-900/90 text-[11px]">
+                          {ans.aiFeedback}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Teacher Manual Grading / Override Box */}
+                    {isEssay && (
+                      <div className="mt-3 pt-3 border-t border-slate-200/80 bg-white/80 p-3 rounded-xl space-y-2 text-xs">
+                        <div className="flex items-center justify-between font-bold text-slate-800">
+                          <span className="flex items-center gap-1">
+                            <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Giáo viên chấm điểm & Nhận xét:</span>
+                          </span>
+                          <button
+                            onClick={() => handleAiGradeSingleQuestion(ans, question)}
+                            disabled={isLoadingAI}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold border border-indigo-200 cursor-pointer disabled:opacity-50"
+                          >
+                            <Sparkles className={`w-3 h-3 ${isLoadingAI ? 'animate-spin' : ''}`} />
+                            <span>{isLoadingAI ? 'AI đang chấm...' : '✨ Chấm bằng AI'}</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                          <div className="flex items-center gap-2">
+                            <label className="text-slate-600 font-semibold shrink-0">Điểm:</label>
+                            <input
+                              type="number"
+                              step="0.25"
+                              min="0"
+                              max={question.points}
+                              value={currentScore}
+                              onChange={(e) => setTeacherScoreInput(prev => ({
+                                ...prev,
+                                [ans.questionId]: parseFloat(e.target.value) || 0
+                              }))}
+                              className="w-20 px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <span className="text-slate-400">/{question.points}đ</span>
+                          </div>
+
+                          <div className="sm:col-span-2 flex items-center gap-2">
+                            <input
+                              type="text"
+                              placeholder="Lời phê của giáo viên..."
+                              value={currentFeedback}
+                              onChange={(e) => setTeacherFeedbackInput(prev => ({
+                                ...prev,
+                                [ans.questionId]: e.target.value
+                              }))}
+                              className="flex-1 px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button
+                              onClick={() => handleSaveTeacherManualGrade(ans, question)}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${
+                                isSaved ? 'bg-emerald-600 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                              }`}
+                            >
+                              {isSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                              <span>{isSaved ? 'Đã lưu' : 'Lưu'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1104,6 +1388,14 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal: View Full Size Image in Lightbox */}
+      <ImageLightboxModal
+        isOpen={Boolean(lightboxImageUrl)}
+        imageUrl={lightboxImageUrl}
+        onClose={() => setLightboxImageUrl(null)}
+        title="Chi tiết ảnh bài làm"
+      />
 
       {/* Modal: Print Exam Paper */}
       {showPrintModal && (

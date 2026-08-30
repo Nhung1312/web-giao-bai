@@ -350,19 +350,23 @@ export class FileParserService {
    * Trích xuất thông tin một khối câu hỏi (Biết tự tìm A, B, C, D)
    */
   private static extractSingleQuestionInfo(blockText: string, order: number): ParsedItem {
-    // Regex tìm đáp án A., B., C., D. (có hỗ trợ A) hoặc A: )
-    const aRegex = /(?:^|\s)A[\.\:\)]\s*/;
-    const bRegex = /(?:^|\s)B[\.\:\)]\s*/;
-    const cRegex = /(?:^|\s)C[\.\:\)]\s*/;
-    const dRegex = /(?:^|\s)D[\.\:\)]\s*/;
+    // Regex tìm đáp án A., B., C., D. (chỉ chấp nhận chữ hoa A., B., C., D. rõ ràng)
+    const aRegex = /(?:^|\n|\s)A[\.\:\)]\s+/;
+    const bRegex = /(?:^|\n|\s)B[\.\:\)]\s+/;
+    const cRegex = /(?:^|\n|\s)C[\.\:\)]\s+/;
+    const dRegex = /(?:^|\n|\s)D[\.\:\)]\s+/;
+
+    // Kiểm tra xem có chứa các ý a), b), c) hoặc 1), 2) tự luận hay không
+    const hasSubParts = /(?:^|\n|\s)(?:[a-d]\)|[1-4]\))\s+/i.test(blockText);
+    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính giá trị|tìm x|giải phương trình|vẽ hình)\b/i.test(blockText);
 
     const aMatch = blockText.match(aRegex);
     const bMatch = blockText.match(bRegex);
     const cMatch = blockText.match(cRegex);
     const dMatch = blockText.match(dRegex);
 
-    // CHÌA KHÓA: Nếu tìm thấy cả A và B trong nội dung -> CHẮC CHẮN LÀ TRẮC NGHIỆM!
-    const isMultipleChoice = (aMatch !== null && bMatch !== null);
+    // CHÌA KHÓA: Nếu tìm thấy cả A và B trong nội dung VÀ không phải là câu chứng minh phân nhánh a), b) -> TRẮC NGHIỆM
+    const isMultipleChoice = (aMatch !== null && bMatch !== null) && !(hasSubParts && !cMatch && !dMatch);
     
     let questionContent = blockText;
     let optA = '', optB = '', optC = '', optD = '';
@@ -389,7 +393,7 @@ export class FileParserService {
           optC = blockText.substring(cIdx + cMatch![0].length).trim();
         } else {
           optA = blockText.substring(aIdx + aMatch![0].length, bIdx).trim();
-          optB = blockText.substring(bIdx + bMatch![0].length).trim();
+          optB = blockText.substring(bIdx + bMatch![0].length, dIdx !== -1 ? dIdx : undefined).trim();
         }
       }
     }
@@ -401,7 +405,7 @@ export class FileParserService {
       id: `q_parsed_${Date.now()}_${order}`,
       order: order,
       question: questionContent || blockText,
-      type: isMultipleChoice ? 'multiple_choice' : 'short_answer',
+      type: isMultipleChoice ? 'multiple_choice' : 'essay',
       category: isMultipleChoice ? 'trac_nghiem' : 'tu_luan',
       options: isMultipleChoice
         ? [
@@ -410,11 +414,9 @@ export class FileParserService {
             { id: 'C', text: optC || 'Phương án C' },
             { id: 'D', text: optD || 'Phương án D' }
           ]
-        : [
-            { id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }
-          ],
+        : [],
       correctAnswer: isMultipleChoice ? 'A' : '',
-      points: isMultipleChoice ? 0.5 : 1.0,
+      points: isMultipleChoice ? 0.5 : (hasProofKeywords ? 1.5 : 1.0),
       topicHint: 'Toán THCS',
       rawText: blockText,
       selected: true
@@ -426,9 +428,9 @@ export class FileParserService {
       id: `q_parsed_${Date.now()}_${order}`,
       order: order,
       question: text.trim(),
-      type: 'short_answer',
+      type: 'essay',
       category: 'tu_luan',
-      options: [{ id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }],
+      options: [],
       correctAnswer: '',
       points: 1.0,
       topicHint: 'Toán THCS',
@@ -440,18 +442,19 @@ export class FileParserService {
    * Convert parsed items to app Question model
    */
   static convertToQuestions(items: ParsedItem[]): Question[] {
-    return items.map((item, idx) => ({
-      id: `q_import_${Date.now()}_${idx + 1}`,
-      order: idx + 1,
-      question: item.question,
-      type: item.type,
-      options: item.options && item.options.length > 0 ? item.options : [
-        { id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }
-      ],
-      correctAnswer: item.correctAnswer || 'A',
-      points: item.points || (item.category === 'trac_nghiem' ? 0.5 : 1.0),
-      explanation: item.explanation || '',
-      topicHint: item.topicHint || 'Toán THCS'
-    }));
+    return items.map((item, idx) => {
+      const isEssay = item.type === 'essay' || item.category === 'tu_luan' || !item.options || item.options.length < 2 || item.options.every(o => !o.text || !o.text.trim());
+      return {
+        id: `q_import_${Date.now()}_${idx + 1}`,
+        order: idx + 1,
+        question: item.question,
+        type: isEssay ? 'essay' : 'multiple_choice',
+        options: isEssay ? [] : item.options,
+        correctAnswer: item.correctAnswer || (isEssay ? '' : 'A'),
+        points: item.points || (isEssay ? 1.0 : 0.5),
+        explanation: item.explanation || '',
+        topicHint: item.topicHint || 'Toán THCS'
+      };
+    });
   }
 }

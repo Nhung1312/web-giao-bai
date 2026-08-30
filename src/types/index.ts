@@ -21,7 +21,7 @@ export interface ClassRoom {
   createdAt: string;
 }
 
-export type QuestionType = 'multiple_choice' | 'short_answer' | 'true_false';
+export type QuestionType = 'multiple_choice' | 'short_answer' | 'true_false' | 'essay';
 
 export interface QuestionOption {
   id: string; // 'A' | 'B' | 'C' | 'D'
@@ -34,10 +34,11 @@ export interface Question {
   question: string; // Content, can contain math notation
   type: QuestionType;
   options: QuestionOption[]; // e.g. [{id: 'A', text: '1/2'}, {id: 'B', text: '5/4'}, ...]
-  correctAnswer: string; // 'A' | 'B' | 'C' | 'D' (or text for short_answer)
+  correctAnswer: string; // 'A' | 'B' | 'C' | 'D' (or text for short_answer/essay criteria)
   points: number; // Điểm câu hỏi (mặc định e.g. 0.5 điểm hoặc 1 điểm)
   explanation?: string; // Lời giải chi tiết
   topicHint?: string; // e.g. "Quy đồng mẫu số", "Rút gọn phân số"
+  rubric?: string; // Hướng dẫn / tiêu chí chấm tự luận cho AI và Giáo viên
 }
 
 // ==========================================
@@ -66,6 +67,7 @@ export interface Assignment {
   className?: string; // cached name
   templateId?: string; // MỚI: ID của đề mẫu trong Kho Đề (nếu bài tập này được tạo từ Kho)
   pdfUrl?: string; // MỚI: Đường dẫn file PDF gốc để hiển thị cho học sinh xem đề
+  type?: 'pdf' | 'text'; // Flag nhận diện đề PDF hoặc trắc nghiệm văn bản
   questions: Question[];
   durationMinutes: number; // 0 = unlimited, >0 = minutes limit
   deadline: string; // ISO date string or YYYY-MM-DD
@@ -83,10 +85,26 @@ export interface ViolationEvent {
 
 export interface StudentAnswer {
   questionId: string;
-  selectedAnswer: string; // 'A', 'B', 'C', 'D' or text
+  selectedAnswer: string; // 'A', 'B', 'C', 'D' or text / student typed notes
   isCorrect: boolean;
   pointsEarned: number;
   maxPoints: number;
+  essayImages?: string[]; // Ảnh chụp bài làm tự luận / nháp
+  studentSolutionText?: string; // Lời giải tự luận học sinh gõ (nếu có)
+  aiFeedback?: string; // Nhận xét của AI
+  aiScore?: number; // Điểm do AI đề xuất
+  aiGraded?: boolean; // Đã được AI chấm
+  teacherFeedback?: string; // Nhận xét của giáo viên
+  teacherScore?: number; // Điểm giáo viên chấm hoặc điều chỉnh
+}
+
+export interface EssayGradingResult {
+  score: number;
+  maxScore: number;
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  stepByStepCorrection?: string;
 }
 
 export interface Submission {
@@ -107,6 +125,8 @@ export interface Submission {
   timeSpentSeconds: number; // Thời gian làm bài
   startedAt: string;
   submittedAt: string;
+  essayImages?: string[]; // Ảnh bài làm tổng thể đính kèm nếu có
+  isAiGraded?: boolean;
   // Anti-cheat monitoring fields
   tabSwitchCount?: number;
   violationEvents?: ViolationEvent[];

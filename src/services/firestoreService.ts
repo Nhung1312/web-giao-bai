@@ -262,9 +262,6 @@ export class FirestoreService {
   /**
    * Xóa một đề mẫu khỏi Kho Đề
    */
-  static async deleteExamTemplate(templateId: string):Prompt<void> {
-    // Note: TypeScript fix -> Promise<void>
-  }
   static async deleteExamTemplate(templateId: string): Promise<void> {
     try {
       await deleteDoc(doc(db, EXAM_TEMPLATES_COLLECTION, templateId));

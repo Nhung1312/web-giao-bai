@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { aiService } from '../../services/aiService';
 import { FileUploadModal } from '../../components/FileUploadModal';
 import { MathDisplay } from '../../components/MathDisplay';
+import { isEssayQuestion, normalizeQuestion } from '../../utils/questionUtils';
 import { 
   Plus, 
   Trash2, 
@@ -120,7 +121,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   const [aiGenCount, setAiGenCount] = useState(5);
   const [importSuccessAlert, setImportSuccessAlert] = useState<string | null>(null);
 
-  // --- LOGIC XỬ LÝ TEXT MODE (GIỮ NGUYÊN) ---
+  // --- LOGIC XỬ LÝ TEXT MODE ---
   const handleAddQuestion = () => {
     const nextOrder = questions.length + 1;
     const newQ: Question = {
@@ -135,7 +136,23 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         { id: 'D', text: '' }
       ],
       correctAnswer: 'A',
-      points: 1,
+      points: 0.5,
+      explanation: '',
+      topicHint: topic
+    };
+    setQuestions([...questions, newQ]);
+  };
+
+  const handleAddEssayQuestion = () => {
+    const nextOrder = questions.length + 1;
+    const newQ: Question = {
+      id: `q_essay_${Date.now()}_${nextOrder}`,
+      order: nextOrder,
+      question: '',
+      type: 'essay',
+      options: [],
+      correctAnswer: '',
+      points: 1.0,
       explanation: '',
       topicHint: topic
     };
@@ -153,18 +170,35 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
 
   const handleUpdateQuestion = (idx: number, updates: Partial<Question>) => {
     const updated = [...questions];
-    updated[idx] = { ...updated[idx], ...updates };
+    const targetQ = { ...updated[idx], ...updates };
+    
+    // Nếu đổi sang tự luận, làm sạch options
+    if (updates.type === 'essay') {
+      targetQ.options = [];
+      targetQ.correctAnswer = '';
+    } else if (updates.type === 'multiple_choice' && (!targetQ.options || targetQ.options.length === 0)) {
+      targetQ.options = [
+        { id: 'A', text: '' },
+        { id: 'B', text: '' },
+        { id: 'C', text: '' },
+        { id: 'D', text: '' }
+      ];
+      targetQ.correctAnswer = 'A';
+    }
+
+    updated[idx] = targetQ;
     setQuestions(updated);
   };
 
   const handleUpdateOption = (qIdx: number, optId: string, text: string) => {
     const q = questions[qIdx];
-    const newOptions = q.options.map(opt => (opt.id === optId ? { ...opt, text } : opt));
+    const newOptions = (q.options || []).map(opt => (opt.id === optId ? { ...opt, text } : opt));
     handleUpdateQuestion(qIdx, { options: newOptions });
   };
 
   const handleImportQuestionsFromFile = (importedQuestions: Question[]) => {
     if (!importedQuestions || importedQuestions.length === 0) return;
+    const normalized = importedQuestions.map(q => normalizeQuestion(q));
     const isSingleDefault =
       questions.length === 1 &&
       (questions[0].question.includes('Tập hợp các số hữu tỉ') ||
@@ -173,10 +207,10 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
 
     let finalQuestions: Question[] = [];
     if (isSingleDefault) {
-      finalQuestions = importedQuestions.map((q, i) => ({ ...q, order: i + 1 }));
+      finalQuestions = normalized.map((q, i) => ({ ...q, order: i + 1 }));
     } else {
       const startingOrder = questions.length + 1;
-      const reIndexed = importedQuestions.map((q, i) => ({
+      const reIndexed = normalized.map((q, i) => ({
         ...q,
         order: startingOrder + i
       }));
@@ -260,7 +294,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
           alert(`Câu hỏi số ${i + 1} chưa nhập nội dung.`);
           return;
         }
-        if (q.type === 'multiple_choice') {
+        if (!isEssayQuestion(q) && q.type === 'multiple_choice') {
           const hasEmptyOpt = q.options.some(o => !o.text.trim());
           if (hasEmptyOpt) {
             alert(`Câu hỏi số ${i + 1} còn phương án lựa chọn bị trống.`);
@@ -268,7 +302,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
           }
         }
       }
-      finalQuestions = questions;
+      finalQuestions = questions.map(q => normalizeQuestion(q));
       finalType = 'text';
     } 
     // VALIDATE VÀ BUILD DỮ LIỆU CHẾ ĐỘ PDF
@@ -593,6 +627,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                   className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4"
                 >
                   {/* Question Header */}
+                  {/* Question Header */}
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div className="flex items-center space-x-3">
                       <span className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center">
@@ -600,13 +635,19 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                       </span>
                       <span className="font-bold text-sm text-slate-800">Câu hỏi số {qIdx + 1}</span>
                       
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        q.type === 'multiple_choice' 
-                          ? 'bg-blue-100 text-blue-700' 
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {q.type === 'multiple_choice' ? 'TRẮC NGHIỆM' : 'TỰ LUẬN'}
-                      </span>
+                      {/* Type selector */}
+                      <select
+                        value={isEssayQuestion(q) ? 'essay' : 'multiple_choice'}
+                        onChange={(e) => handleUpdateQuestion(qIdx, { type: e.target.value as 'multiple_choice' | 'essay' })}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                          isEssayQuestion(q)
+                            ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                        }`}
+                      >
+                        <option value="multiple_choice">🎯 Trắc nghiệm (A, B, C, D)</option>
+                        <option value="essay">✍️ Tự luận (Học sinh giải/chụp ảnh)</option>
+                      </select>
                     </div>
 
                     <div className="flex items-center space-x-3">
@@ -648,7 +689,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                       rows={2}
                       value={q.question}
                       onChange={(e) => handleUpdateQuestion(qIdx, { question: e.target.value })}
-                      placeholder="Nhập đề bài Toán..."
+                      placeholder={isEssayQuestion(q) ? "Nhập đề bài tự luận Toán (ví dụ: a) Rút gọn biểu thức A; b) Tìm x để A > 0...)" : "Nhập đề bài Toán..."}
                       className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500"
                       required
                     />
@@ -662,14 +703,16 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                     )}
                   </div>
 
-                  {/* Options */}
-                  {q.type === 'multiple_choice' && (
+                  {/* Options for Multiple Choice */}
+                  {!isEssayQuestion(q) && (
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-2">
                         Các lựa chọn & Đáp án đúng <span className="text-indigo-600">(Chọn nút tròn để làm đáp án)</span>
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {q.options.map((opt) => {
+                        {(q.options && q.options.length > 0 ? q.options : [
+                          { id: 'A', text: '' }, { id: 'B', text: '' }, { id: 'C', text: '' }, { id: 'D', text: '' }
+                        ]).map((opt) => {
                           const isCorrect = q.correctAnswer === opt.id;
                           return (
                             <div
@@ -702,14 +745,32 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                     </div>
                   )}
 
+                  {/* Rubric / Criteria for Essay */}
+                  {isEssayQuestion(q) && (
+                    <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-2">
+                      <label className="block text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Tiêu chí chấm điểm / Thang điểm chi tiết (Rubric để AI chấm):</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={q.rubric || ''}
+                        onChange={(e) => handleUpdateQuestion(qIdx, { rubric: e.target.value })}
+                        placeholder="Ví dụ: - Rút gọn đúng mẫu số: +0.5đ; - Biến đổi đúng tử: +0.5đ; - Kết luận: +0.5đ"
+                        className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                  )}
+
                   {/* Explanation */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Lời giải chi tiết</label>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Lời giải chi tiết / Hướng dẫn giải</label>
                       <input
                         type="text"
                         value={q.explanation || ''}
                         onChange={(e) => handleUpdateQuestion(qIdx, { explanation: e.target.value })}
+                        placeholder="Hướng dẫn giải từng bước..."
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
                       />
                     </div>
@@ -719,6 +780,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                         type="text"
                         value={q.topicHint || ''}
                         onChange={(e) => handleUpdateQuestion(qIdx, { topicHint: e.target.value })}
+                        placeholder="Ví dụ: Hình học không gian, Rút gọn biểu thức..."
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
                       />
                     </div>
@@ -727,14 +789,23 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
               ))}
             </div>
 
-            <div className="flex justify-center pt-2">
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={handleAddQuestion}
-                className="inline-flex items-center space-x-2 px-6 py-3 bg-white hover:bg-slate-50 text-indigo-600 font-bold rounded-2xl border-2 border-dashed border-indigo-300 hover:border-indigo-500 shadow-xs transition-all active:scale-98"
+                className="inline-flex items-center space-x-2 px-5 py-3 bg-white hover:bg-slate-50 text-indigo-600 font-bold rounded-2xl border-2 border-dashed border-indigo-300 hover:border-indigo-500 shadow-xs transition-all active:scale-98 cursor-pointer text-xs"
               >
-                <Plus className="w-5 h-5" />
-                <span>+ THÊM CÂU HỎI TRẮC NGHIỆM</span>
+                <Plus className="w-4 h-4" />
+                <span>+ THÊM CÂU TRẮC NGHIỆM</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddEssayQuestion}
+                className="inline-flex items-center space-x-2 px-5 py-3 bg-white hover:bg-purple-50 text-purple-700 font-bold rounded-2xl border-2 border-dashed border-purple-300 hover:border-purple-500 shadow-xs transition-all active:scale-98 cursor-pointer text-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ THÊM CÂU TỰ LUẬN</span>
               </button>
             </div>
           </div>

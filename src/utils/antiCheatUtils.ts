@@ -1,4 +1,5 @@
 import { Assignment, Question, QuestionOption, ViolationEvent } from '../types';
+import { isEssayQuestion } from './questionUtils';
 
 /**
  * Trộn ngẫu nhiên (Fisher-Yates Shuffle) danh sách câu hỏi và các đáp án A, B, C, D
@@ -12,6 +13,7 @@ export function shuffleAssignmentQuestionsAndOptions(assignment: Assignment): As
   // 1. Tạo bản sao sâu của danh sách câu hỏi
   const questionsClone: Question[] = assignment.questions.map(q => ({
     ...q,
+    type: isEssayQuestion(q) ? 'essay' : (q.type || 'multiple_choice'),
     options: q.options ? q.options.map(opt => ({ ...opt })) : []
   }));
 
@@ -25,10 +27,12 @@ export function shuffleAssignmentQuestionsAndOptions(assignment: Assignment): As
   const standardLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   const shuffledQuestions: Question[] = questionsClone.map((q, qIdx) => {
-    if (!q.options || q.options.length <= 1) {
+    if (isEssayQuestion(q) || !q.options || q.options.length <= 1) {
       return {
         ...q,
-        order: qIdx + 1
+        type: 'essay',
+        order: qIdx + 1,
+        options: []
       };
     }
 
