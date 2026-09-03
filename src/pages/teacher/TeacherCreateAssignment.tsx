@@ -8,6 +8,7 @@ import { aiService } from '../../services/aiService';
 import { FileUploadModal } from '../../components/FileUploadModal';
 import { MathDisplay } from '../../components/MathDisplay';
 import { isEssayQuestion, normalizeQuestion } from '../../utils/questionUtils';
+import { SubscriptionService } from '../../services/subscriptionService';
 import { 
   Plus, 
   Trash2, 
@@ -280,6 +281,17 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     if (!title.trim()) {
       alert('Vui lòng nhập tên bài tập.');
       return;
+    }
+
+    // Kiểm tra thời hạn dùng thử 15 ngày của Giáo viên
+    if (user) {
+      try {
+        const sub = await SubscriptionService.getSubscription(user);
+        if (sub.status === 'expired') {
+          alert('⚠️ Thời gian dùng thử 15 ngày của Thầy/Cô đã kết thúc.\nVui lòng thanh toán hoặc nhập mã kích hoạt để tiếp tục tạo và xuất bản bài thi mới!');
+          return;
+        }
+      } catch {}
     }
 
     let finalQuestions: Question[] = [];

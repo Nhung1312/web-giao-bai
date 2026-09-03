@@ -157,3 +157,47 @@ export interface AssignmentStats {
   questionAnalyses: QuestionAnalysis[];
   mostMissedQuestions: QuestionAnalysis[];
 }
+
+// ==========================================
+// THÔNG TIN BẢN QUYỀN & DÙNG THỬ CỦA GIÁO VIÊN
+// ==========================================
+export type SubscriptionPlanId = 'semester' | 'yearly' | 'lifetime';
+
+export interface PaymentPlan {
+  id: SubscriptionPlanId;
+  name: string;
+  price: number;
+  originalPrice: number;
+  durationMonths: number; // 6, 12, or 999
+  description: string;
+  badge?: string;
+  popular?: boolean;
+}
+
+export interface TeacherSubscription {
+  teacherId: string;
+  email: string;
+  displayName: string;
+  registeredAt: string; // ISO date
+  trialEndsAt: string;  // ISO date (15 days from registeredAt)
+  isVip: boolean;       // true if upgraded
+  vipPlan?: SubscriptionPlanId;
+  vipExpiresAt?: string | null; // ISO date, or null if lifetime
+  activatedAt?: string;
+  activationCode?: string;
+  status: 'trial' | 'active' | 'expired';
+  daysLeft: number;
+}
+
+export interface PaymentRequest {
+  id: string;
+  teacherId: string;
+  teacherEmail: string;
+  teacherName: string;
+  planId: SubscriptionPlanId;
+  planName: string;
+  amount: number;
+  transferCode: string;
+  status: 'pending' | 'approved';
+  createdAt: string;
+}

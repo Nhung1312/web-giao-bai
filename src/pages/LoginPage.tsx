@@ -10,28 +10,20 @@ import {
   ArrowLeft,
   AlertCircle,
   Loader2,
-  UserCheck,
   Copy,
   Check,
-  ExternalLink,
-  ShieldAlert,
-  ArrowRight
+  ShieldAlert
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { signInWithGoogle, loginAsTeacher, user } = useAuth();
+  const { signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
-  const [activeTab, setActiveTab] = useState<'quick' | 'google'>('quick');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
-
-  // Form state for quick teacher login
-  const [teacherName, setTeacherName] = useState('Thầy/Cô Giáo viên Toán');
-  const [teacherEmail, setTeacherEmail] = useState('giaovien@toanthcs.edu.vn');
 
   const destination = (location.state as any)?.from || '/teacher';
 
@@ -61,22 +53,8 @@ export const LoginPage: React.FC = () => {
       } else if (err?.code === 'auth/cancelled-popup-request') {
         setErrorMsg('Yêu cầu đăng nhập đã bị hủy.');
       } else {
-        setErrorMsg(err?.message || 'Không thể đăng nhập bằng Google. Vui lòng thử lại hoặc dùng chế độ Đăng nhập nhanh.');
+        setErrorMsg(err?.message || 'Không thể đăng nhập bằng Google. Vui lòng thử lại.');
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickTeacherLogin = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setLoading(true);
-    try {
-      loginAsTeacher({
-        name: teacherName.trim() || 'Thầy/Cô Giáo viên Toán',
-        email: teacherEmail.trim() || 'giaovien@toanthcs.edu.vn'
-      });
-      navigate(destination, { replace: true });
     } finally {
       setLoading(false);
     }
@@ -127,40 +105,6 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Tab Selector */}
-          <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-5">
-            <button
-              type="button"
-              onClick={() => { setActiveTab('quick'); setErrorMsg(null); setIsUnauthorizedDomain(false); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
-                activeTab === 'quick'
-                  ? 'bg-white dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Đăng nhập Giáo viên</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { setActiveTab('google'); setErrorMsg(null); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
-                activeTab === 'google'
-                  ? 'bg-white dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-              </svg>
-              <span>Google Account</span>
-            </button>
-          </div>
-
           {/* Unauthorized Domain Alert Helper */}
           {isUnauthorizedDomain && (
             <div className="mb-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs space-y-3 animate-in fade-in duration-200">
@@ -171,22 +115,13 @@ export const LoginPage: React.FC = () => {
                     Tên miền chưa được thêm vào Firebase Authorized Domains
                   </div>
                   <p className="mt-1 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                    Tên miền <code className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/80 rounded font-mono text-[11px] font-bold">{currentHost}</code> chưa được thêm vào mục <strong>Authentication &gt; Settings &gt; Authorized domains</strong> trong Firebase Console.
+                    Tên miền <code className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/80 rounded font-mono text-[11px] font-bold">{currentHost}</code> chưa được thêm vào mục <strong>Authentication &gt; Settings &gt; Authorized domains</strong> trong Firebase Console của dự án.
                   </p>
                 </div>
               </div>
 
-              {/* Action Fallbacks */}
-              <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/60 flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleQuickTeacherLogin()}
-                  className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <span>⚡ Vào thẳng Bảng Giáo viên ngay</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-
+              {/* Action Button */}
+              <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/60 flex justify-end">
                 <button
                   type="button"
                   onClick={handleCopyDomain}
@@ -207,104 +142,51 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 1: QUICK TEACHER LOGIN */}
-          {activeTab === 'quick' && (
-            <form onSubmit={handleQuickTeacherLogin} className="space-y-4 animate-in fade-in duration-150">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Tên Thầy/Cô hiển thị:
-                </label>
-                <input
-                  type="text"
-                  value={teacherName}
-                  onChange={(e) => setTeacherName(e.target.value)}
-                  placeholder="Ví dụ: Thầy Nguyễn Văn A"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
+          {/* GOOGLE SIGN-IN */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full py-3.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex items-center justify-center space-x-3 cursor-pointer active:scale-[0.99] disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                  <span>Đang kết nối tài khoản Google...</span>
+                </>
+              ) : (
+                <>
+                  {/* Google SVG Logo */}
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span>Đăng nhập với Google</span>
+                </>
+              )}
+            </button>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Email Giáo viên:
-                </label>
-                <input
-                  type="email"
-                  value={teacherEmail}
-                  onChange={(e) => setTeacherEmail(e.target.value)}
-                  placeholder="giaovien@toanthcs.edu.vn"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-[0.99] disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Đang chuẩn bị...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="w-4 h-4" />
-                    <span>Vào Bảng điều khiển Giáo viên</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* TAB 2: GOOGLE SIGN-IN */}
-          {activeTab === 'google' && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full py-3.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex items-center justify-center space-x-3 cursor-pointer active:scale-[0.99] disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
-                    <span>Đang kết nối tài khoản Google...</span>
-                  </>
-                ) : (
-                  <>
-                    {/* Google SVG Logo */}
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                      <path
-                        fill="#4285F4"
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                      />
-                    </svg>
-                    <span>Đăng nhập với Google</span>
-                  </>
-                )}
-              </button>
-
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400">
-                <p>
-                  Đăng nhập qua Google đồng bộ hóa trực tiếp đề thi và dữ liệu với dự án Firebase <code className="font-mono text-slate-700 dark:text-slate-300">toan-thcs-2026</code>.
-                </p>
-              </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400">
+              <p>
+                Đăng nhập qua Google đồng bộ hóa trực tiếp đề thi và kết quả với dự án Firebase <code className="font-mono text-slate-700 dark:text-slate-300">toan-thcs-2026</code>.
+              </p>
             </div>
-          )}
+          </div>
 
           {/* Feature Highlights */}
           <div className="mt-6 space-y-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">

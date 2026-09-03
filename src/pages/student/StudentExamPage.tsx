@@ -212,6 +212,8 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfUploadInputRef = useRef<HTMLInputElement>(null);
+  const leaveTimeRef = useRef<number | null>(null);
+  const isFilePickerActiveRef = useRef<boolean>(false);
 
   const questions = currentAssignment.questions;
   const currentQ: Question | undefined = questions[currentIndex];
@@ -244,16 +246,54 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     triggerAntiCheatToast(`⚠️ Vi phạm giám sát: ${description}`);
   }, [triggerAntiCheatToast]);
 
-  // Anti-cheat Listeners: Visibility, Blur, Fullscreen, ContextMenu, Keydown
+  // Anti-cheat Listeners: Visibility, Blur/Focus, ContextMenu, Copy, Keydown
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        recordViolation('tab_switch', 'Học sinh chuyển sang tab khác hoặc thu nhỏ trình duyệt');
+        if (!isFilePickerActiveRef.current && !leaveTimeRef.current) {
+          leaveTimeRef.current = Date.now();
+        }
+      } else {
+        if (isFilePickerActiveRef.current) {
+          setTimeout(() => {
+            isFilePickerActiveRef.current = false;
+          }, 1000);
+          leaveTimeRef.current = null;
+          return;
+        }
+        if (leaveTimeRef.current) {
+          const elapsedSeconds = Math.max(1, Math.round((Date.now() - leaveTimeRef.current) / 1000));
+          leaveTimeRef.current = null;
+          recordViolation(
+            'tab_switch',
+            `Rời khỏi tab bài thi (Chuyển tab hoặc thu nhỏ trình duyệt) trong ~${elapsedSeconds}s`
+          );
+        }
       }
     };
 
     const handleWindowBlur = () => {
-      // Blur trigger
+      if (!isFilePickerActiveRef.current && !leaveTimeRef.current) {
+        leaveTimeRef.current = Date.now();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (isFilePickerActiveRef.current) {
+        setTimeout(() => {
+          isFilePickerActiveRef.current = false;
+        }, 1200);
+        leaveTimeRef.current = null;
+        return;
+      }
+      if (leaveTimeRef.current) {
+        const elapsedSeconds = Math.max(1, Math.round((Date.now() - leaveTimeRef.current) / 1000));
+        leaveTimeRef.current = null;
+        recordViolation(
+          'tab_switch',
+          `Rời khỏi tab bài thi (Chuyển tab hoặc thu nhỏ trình duyệt) trong ~${elapsedSeconds}s`
+        );
+      }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -262,12 +302,30 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       return false;
     };
 
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      triggerAntiCheatToast('🔒 Khóa thao tác sao chép nội dung bài thi.');
+      recordViolation('copy_attempt', 'Cố gắng sao chép nội dung câu hỏi bài thi');
+      return false;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Chặn PrintScreen, F12, Ctrl+U, Ctrl+Shift+I, Ctrl+C, Ctrl+V, Ctrl+P
+      // Chặn PrintScreen, F12, Ctrl+U, Ctrl+Shift+I, Ctrl+C, Ctrl+V, Ctrl+P, Ctrl+S
       if (
         e.key === 'F12' ||
-        (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V' || e.key === 'p' || e.key === 'P')) ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
+        e.key === 'PrintScreen' ||
+        (e.ctrlKey && (
+          e.key === 'u' || e.key === 'U' || 
+          e.key === 'c' || e.key === 'C' || 
+          e.key === 'v' || e.key === 'V' || 
+          e.key === 'p' || e.key === 'P' ||
+          e.key === 's' || e.key === 'S'
+        )) ||
+        (e.ctrlKey && e.shiftKey && (
+          e.key === 'I' || e.key === 'i' || 
+          e.key === 'J' || e.key === 'j' || 
+          e.key === 'C' || e.key === 'c'
+        ))
       ) {
         e.preventDefault();
         triggerAntiCheatToast('🔒 Phím tắt này đã bị vô hiệu hóa trong phòng thi.');
@@ -275,16 +333,30 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       }
     };
 
+    // Ignore file picker clicks when uploading essay solution images
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'file' || target.closest('input[type="file"], label'))) {
+        isFilePickerActiveRef.current = true;
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopy);
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('click', handleDocumentClick, true);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopy);
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('click', handleDocumentClick, true);
     };
   }, [recordViolation, triggerAntiCheatToast]);
 
@@ -1453,6 +1525,148 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                 className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl"
               >
                 Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ANTI-CHEAT VIOLATION MODAL (CẢNH BÁO GIÁM SÁT THI CỬ) */}
+      {showViolationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full shadow-2xl border border-rose-300 dark:border-rose-900/70 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Red Top Header Banner */}
+            <div className="bg-rose-600 px-6 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-sm uppercase tracking-wider">
+                  CẢNH BÁO GIÁM SÁT THI CỬ
+                </h3>
+              </div>
+              <span className="text-xs bg-white/25 px-2.5 py-1 rounded-full font-bold">
+                Lần {latestViolation?.count ?? tabSwitchCount}
+              </span>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-4">
+              <div className="text-center space-y-2">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto border border-amber-200 dark:border-amber-800 shadow-inner">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <h4 className="text-lg font-black text-slate-900 dark:text-white">
+                  Phát hiện rời màn hình làm bài!
+                </h4>
+                <div className="inline-block px-3 py-1 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 rounded-full font-extrabold text-xs border border-rose-200 dark:border-rose-800">
+                  Số lần vi phạm đã ghi nhận: Lần {latestViolation?.count ?? tabSwitchCount}
+                </div>
+              </div>
+
+              {/* Details Box */}
+              <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+                <div className="flex items-start justify-between">
+                  <span className="text-slate-500 dark:text-slate-400 font-bold">Chi tiết:</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-semibold text-right max-w-[240px]">
+                    {latestViolation?.reason || 'Học sinh chuyển sang tab khác hoặc thu nhỏ trình duyệt'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400 font-bold">Thời gian ghi nhận:</span>
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                    {latestViolation?.time || new Date().toLocaleTimeString('vi-VN')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Regulation Warning Box */}
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-800/60 flex items-start space-x-2.5 text-xs text-amber-900 dark:text-amber-200">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="leading-relaxed text-[11px]">
+                  <strong>Quy định phòng thi trực tuyến:</strong> Hệ thống tự động ghi nhật ký mọi thao tác chuyển tab, mở ứng dụng khác hoặc copy text. Toàn bộ lịch sử vi phạm sẽ được gửi trực tiếp đến giáo viên trong bảng kết quả chấm thi.
+                </div>
+              </div>
+
+              {/* Action Commit Button */}
+              <button
+                type="button"
+                onClick={() => setShowViolationModal(false)}
+                className="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2 active:scale-[0.99] cursor-pointer"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Tôi cam kết tiếp tục làm bài nghiêm túc</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ANTI-CHEAT POLICY MODAL */}
+      {showAntiCheatPolicyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-indigo-600 px-6 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-white">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-sm uppercase tracking-wider">
+                  QUY CHẾ PHÒNG THI TRỰC TUYẾN
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAntiCheatPolicyModal(false)}
+                className="text-white/80 hover:text-white p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="space-y-3">
+                <div className="flex items-start space-x-3 p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50">
+                  <EyeOff className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="font-black text-slate-900 dark:text-white">Giám sát rời màn hình làm bài</h5>
+                    <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">
+                      Không chuyển sang thẻ trình duyệt khác hoặc mở ứng dụng tìm kiếm. Hệ thống ghi lại từng giây rời tab.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="font-black text-slate-900 dark:text-white">Vô hiệu hóa phím tắt &amp; Chuột phải</h5>
+                    <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">
+                      Khóa chuột phải, cấm sao chép câu hỏi (Ctrl+C), dán (Ctrl+V), PrintScreen và công cụ nhà phát triển (F12).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <Shuffle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="font-black text-slate-900 dark:text-white">Đảo thứ tự câu hỏi &amp; đáp án</h5>
+                    <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">
+                      Mỗi học sinh nhận đề thi với thứ tự câu hỏi và phương án A, B, C, D được xáo trộn độc lập.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-center text-[11px] text-slate-600 dark:text-slate-300">
+                Trạng thái hiện tại: Đã ghi nhận <strong>{tabSwitchCount}</strong> lần vi phạm.
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAntiCheatPolicyModal(false)}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Đã hiểu quy chế, tiếp tục làm bài
               </button>
             </div>
           </div>
