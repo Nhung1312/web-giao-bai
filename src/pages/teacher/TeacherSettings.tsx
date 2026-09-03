@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from '../../services/storageService';
 import { aiService, HybridAIService } from '../../services/aiService';
+import { getAppLogo, setAppLogo, resetAppLogo } from '../../utils/logoHelper';
 import { 
   RotateCcw, 
   Download, 
@@ -17,7 +18,8 @@ import {
   ExternalLink,
   ShieldCheck,
   RefreshCw,
-  HelpCircle
+  HelpCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface TeacherSettingsProps {
@@ -36,6 +38,46 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData })
   // Test connection state
   const [testingConnection, setTestingConnection] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; modelUsed?: string } | null>(null);
+
+  // App Logo state
+  const [appLogo, setLocalAppLogo] = useState<string>(getAppLogo());
+  const [logoUploadMsg, setLogoUploadMsg] = useState<string>('');
+
+  const handleUploadLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Vui lòng chọn tệp định dạng hình ảnh (PNG, JPG, SVG, WebP).');
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      alert('Kích thước ảnh nên nhỏ hơn 3MB để tải nhanh nhất.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setAppLogo(dataUrl);
+        setLocalAppLogo(dataUrl);
+        setLogoUploadMsg('Đã cập nhật Icon ứng dụng thành công!');
+        setTimeout(() => setLogoUploadMsg(''), 3000);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = () => {
+    if (window.confirm('Đặt lại Icon về bản mặc định hệ thống?')) {
+      resetAppLogo();
+      setLocalAppLogo('/icon-192.png');
+      setLogoUploadMsg('Đã khôi phục Icon mặc định.');
+      setTimeout(() => setLogoUploadMsg(''), 3000);
+    }
+  };
 
   useEffect(() => {
     const currentKey = hybridAi.getApiKey() || '';
@@ -311,7 +353,88 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData })
         </div>
       </div>
 
-      {/* SECTION 2: BACKUP & RESTORE */}
+      {/* SECTION 2: APP ICON & LOGO MANAGEMENT */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-bold text-base text-slate-900">Icon & Logo Ứng dụng</h2>
+              <p className="text-xs text-slate-500">
+                Xem và tùy chỉnh biểu tượng hiển thị trên thanh tiêu đề, tab trình duyệt (Favicon) và PWA.
+              </p>
+            </div>
+          </div>
+
+          {logoUploadMsg && (
+            <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-full animate-in fade-in">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{logoUploadMsg}</span>
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+          {/* Logo Preview Cards */}
+          <div className="md:col-span-1 flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-200 text-center space-y-3">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Icon đang sử dụng
+            </span>
+            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md bg-white border border-slate-200/80 p-1 flex items-center justify-center">
+              <img
+                src={appLogo}
+                alt="App Icon Preview"
+                className="w-full h-full object-contain rounded-xl"
+              />
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Định dạng PNG/SVG • Chuẩn Retina
+            </div>
+          </div>
+
+          {/* Action & GitHub info */}
+          <div className="md:col-span-2 space-y-4">
+            <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 text-blue-900 text-xs leading-relaxed space-y-1.5">
+              <div className="flex items-center space-x-1.5 font-bold text-blue-950">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <span>Lưu ý về Icon khi tải lên GitHub:</span>
+              </div>
+              <p className="text-[11px] text-blue-800">
+                Môi trường AI Studio chạy trong container độc lập và không tự động kéo commit từ GitHub về. Tệp icon hiện tại <strong>/icon-192.png</strong> đã được tối ưu và tích hợp sẵn vào thanh tiêu đề, favicon trình duyệt và màn hình đăng nhập.
+              </p>
+              <p className="text-[11px] text-blue-800">
+                Nếu Thầy/Cô muốn đổi sang icon khác từ máy tính cá nhân, chỉ cần bấm nút <strong>Tải ảnh Icon mới</strong> bên dưới — hệ thống sẽ áp dụng ngay tức thì!
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <label className="inline-flex items-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer active:scale-95">
+                <Upload className="w-4 h-4" />
+                <span>Tải ảnh Icon mới từ máy (PNG / JPG / SVG)</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                  onChange={handleUploadLogo}
+                  className="hidden"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={handleResetLogo}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Đặt lại Icon mặc định</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 3: BACKUP & RESTORE */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold">

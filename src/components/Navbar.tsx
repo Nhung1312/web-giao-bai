@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, User as UserIcon, GraduationCap, RotateCcw, Sparkles, Moon, Sun, LogOut, LogIn } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { GradeLevel } from '../types';
+import { getAppLogo } from '../utils/logoHelper';
 
 interface NavbarProps {
   onResetData: () => void;
@@ -14,6 +15,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
   const { user, logout, isAuthenticated } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const [currentLogo, setCurrentLogo] = useState<string>(getAppLogo());
+
+  useEffect(() => {
+    const handleLogoUpdate = (e: any) => {
+      setCurrentLogo(e.detail || getAppLogo());
+    };
+    window.addEventListener('app_logo_updated', handleLogoUpdate);
+    return () => window.removeEventListener('app_logo_updated', handleLogoUpdate);
+  }, []);
 
   const isTeacher = location.pathname.startsWith('/teacher');
   const isStudent = location.pathname.startsWith('/join') || location.pathname.startsWith('/exam');
@@ -36,8 +47,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
             to="/"
             className="flex items-center space-x-3 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
-              <BookOpen className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md group-hover:scale-105 transition-transform bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center border border-slate-200/50 dark:border-slate-700/50 shrink-0">
+              <img
+                src={currentLogo}
+                alt="Logo Toán THCS"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div style={{ display: 'none' }} className="w-full h-full items-center justify-center text-white">
+                <BookOpen className="w-5 h-5" />
+              </div>
             </div>
             <div>
               <span className="font-extrabold text-lg text-slate-900 dark:text-white tracking-tight">

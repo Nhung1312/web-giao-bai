@@ -88,8 +88,20 @@ export const LoginPage: React.FC = () => {
           
           {/* Header */}
           <div className="text-center mb-6 pt-2">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center mb-3 shadow-inner border border-indigo-100 dark:border-indigo-900/50">
-              <BookOpen className="w-7 h-7" />
+            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center mb-3 shadow-md border border-indigo-100 dark:border-indigo-900/50">
+              <img
+                src="/icon-192.png"
+                alt="Logo Toán THCS"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div style={{ display: 'none' }} className="w-full h-full items-center justify-center">
+                <BookOpen className="w-8 h-8" />
+              </div>
             </div>
 
             <div className="inline-flex items-center space-x-1.5 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 text-[11px] font-bold px-3 py-1 rounded-full mb-2">

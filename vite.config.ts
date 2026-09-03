@@ -11,9 +11,9 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.svg', 'icon-192.svg', 'icon-512.svg'],
+        includeAssets: ['favicon.ico', 'favicon.png', 'icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],
         manifest: {
-          name: 'Toán Matsuda/THCS - Luyện thi & Kiểm tra',
+          name: 'TOÁN THCS – Giao bài & Luyện tập',
           short_name: 'Toán THCS',
           description: 'Nền tảng giao bài tập, luyện tập và kiểm tra Toán Lớp 6, 7, 8, 9 với hệ thống tự chấm và phân tích chuyên sâu.',
           theme_color: '#e0f2fe',
@@ -24,16 +24,22 @@ export default defineConfig(() => {
           scope: '/',
           icons: [
             {
-              src: '/icon-192.svg',
+              src: '/icon-192.png',
               sizes: '192x192',
-              type: 'image/svg+xml',
+              type: 'image/png',
               purpose: 'any maskable'
             },
             {
-              src: '/icon-512.svg',
+              src: '/icon-512.png',
               sizes: '512x512',
-              type: 'image/svg+xml',
+              type: 'image/png',
               purpose: 'any maskable'
+            },
+            {
+              src: '/icon-192.svg',
+              sizes: '192x192',
+              type: 'image/svg+xml',
+              purpose: 'any'
             }
           ]
         },
