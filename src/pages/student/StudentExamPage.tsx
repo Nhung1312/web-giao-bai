@@ -9,6 +9,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { shuffleAssignmentQuestionsAndOptions, formatViolationTime } from '../../utils/antiCheatUtils';
 import { isEssayQuestion, getQuestionTypeLabel } from '../../utils/questionUtils';
 import { ImageLightboxModal } from '../../components/ImageLightboxModal';
+import { soundEffects } from '../../utils/soundEffects';
 import { 
   Clock, 
   ChevronLeft, 
@@ -42,8 +43,17 @@ import {
   ExternalLink,
   SplitSquareVertical,
   FileText,
-  Loader2
+  Loader2,
+  Volume2,
+  VolumeX,
+  Zap,
+  CheckCircle2,
+  Calculator as CalculatorIcon,
+  Edit3
 } from 'lucide-react';
+import { ScientificCalculatorModal } from '../../components/ScientificCalculatorModal';
+import { DigitalScratchpadModal } from '../../components/DigitalScratchpadModal';
+import { useMistakeVaultStore } from '../../store/useMistakeVaultStore';
 
 interface StudentExamPageProps {
   assignment: Assignment;
@@ -190,6 +200,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   const [antiCheatToast, setAntiCheatToast] = useState<{ message: string; id: number } | null>(null);
   const [showAntiCheatPolicyModal, setShowAntiCheatPolicyModal] = useState<boolean>(false);
 
+  // MỚI: Trạng thái Máy tính khoa học mini & Bảng nháp trực tiếp
+  const [showCalculator, setShowCalculator] = useState<boolean>(false);
+  const [showScratchpad, setShowScratchpad] = useState<boolean>(false);
+
   // Total timer in seconds
   const totalSeconds = (assignment.durationMinutes || 45) * 60;
   const [timeLeft, setTimeLeft] = useState<number>(() => {
@@ -205,6 +219,14 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   const [fontSizeScale, setFontSizeScale] = useState<'normal' | 'large' | 'xlarge'>('normal');
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [isSubmittingWithAI, setIsSubmittingWithAI] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(() => soundEffects.isMuted());
+  const [matrixFilter, setMatrixFilter] = useState<'all' | 'unanswered' | 'flagged'>('all');
+
+  const handleToggleSound = () => {
+    const nextMuted = soundEffects.toggleMute();
+    setIsMuted(nextMuted);
+    triggerAntiCheatToast(nextMuted ? '🔇 Đã tắt âm thanh' : '🔊 Đã bật âm thanh tương tác sinh động');
+  };
 
   // Lightbox Preview Modal State
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
@@ -387,7 +409,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => clearInterval(interval);
   }, [answers, studentSolutions, essayImagesByQuestion, generalPdfImages, flaggedQuestions, timeLeft, currentIndex, startedAt, currentAssignment, tabSwitchCount, violationEvents, draftStorageKey]);
 
-  // Timer countdown
+  // Timer countdown with audio alerts
   useEffect(() => {
     if (totalSeconds <= 0) return;
 
@@ -398,6 +420,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
           handleForceAutoSubmit();
           return 0;
         }
+        // Nhịp tick âm thanh cảnh báo khi còn 5 phút, 2 phút, 1 phút hoặc 5 giây cuối
+        if (prev === 300 || prev === 120 || prev === 60 || (prev <= 5 && prev > 1)) {
+          soundEffects.playTick();
+        }
         return prev - 1;
       });
     }, 1000);
@@ -405,8 +431,9 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
     return () => clearInterval(timer);
   }, [totalSeconds]);
 
-  // Option selection handler
+  // Option selection handler with pop sound
   const handleSelectOption = (questionId: string, optionId: string) => {
+    soundEffects.playSelect();
     setAnswers((prev) => {
       // Toggle if already selected
       if (prev[questionId] === optionId) {
@@ -487,6 +514,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
   const toggleFlagCurrentQuestion = () => {
     if (!currentQ) return;
+    soundEffects.playFlag();
     setFlaggedQuestions((prev) => {
       if (prev.includes(currentQ.id)) {
         return prev.filter((id) => id !== currentQ.id);
@@ -498,15 +526,61 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
+      soundEffects.playNavigate();
       setCurrentIndex((prev) => prev + 1);
     }
   };
 
   const handlePrev = () => {
     if (currentIndex > 0) {
+      soundEffects.playNavigate();
       setCurrentIndex((prev) => prev - 1);
     }
   };
+
+  // Keyboard navigation shortcuts: Arrow Left/Right, F to flag, A/B/C/D or 1/2/3/4 to choose
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) {
+        return;
+      }
+      if (showSubmitModal || showResetConfirmModal || showAntiCheatPolicyModal || lightboxImageUrl) {
+        return;
+      }
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNext();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrev();
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFlagCurrentQuestion();
+      } else if (currentQ && !isEssayQuestion(currentQ)) {
+        const keyLower = e.key.toLowerCase();
+        if (['a', 'b', 'c', 'd'].includes(keyLower)) {
+          e.preventDefault();
+          const targetOpt = currentQ.options.find(
+            (o) => o.id.toLowerCase() === keyLower || o.id.toUpperCase() === e.key.toUpperCase()
+          );
+          if (targetOpt) {
+            handleSelectOption(currentQ.id, targetOpt.id);
+          }
+        } else if (['1', '2', '3', '4'].includes(e.key)) {
+          e.preventDefault();
+          const idx = parseInt(e.key, 10) - 1;
+          if (currentQ.options[idx]) {
+            handleSelectOption(currentQ.id, currentQ.options[idx].id);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, currentQ, questions.length, showSubmitModal, showResetConfirmModal, showAntiCheatPolicyModal, lightboxImageUrl]);
 
   const handleToggleFullscreen = () => {
     try {
@@ -547,6 +621,7 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
   };
 
   const submitExam = async () => {
+    soundEffects.playSuccess();
     setIsSubmittingWithAI(true);
 
     try {
@@ -614,6 +689,13 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
       await FirestoreService.saveResult(submission);
     } catch (err) {
       console.warn('Lỗi lưu kết quả lên Firestore:', err);
+    }
+
+    // MỚI: Tự động gom các câu làm sai vào Sổ tay câu sai (Mistake Vault)
+    try {
+      useMistakeVaultStore.getState().addMistakesFromSubmission(submission, currentAssignment);
+    } catch (e) {
+      console.warn('Lỗi tự động lưu vào Sổ tay câu sai:', e);
     }
 
     StorageService.saveSubmission(submission);
@@ -779,6 +861,56 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                 </button>
               </div>
             )}
+
+            {/* Sound Effects Toggle */}
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              title={isMuted ? 'Bật âm thanh tương tác' : 'Tắt âm thanh'}
+              className={`p-2 rounded-xl text-xs border transition-all cursor-pointer ${
+                isMuted
+                  ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600'
+                  : 'bg-indigo-50 dark:bg-indigo-950/80 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 shadow-2xs hover:bg-indigo-100 dark:hover:bg-indigo-900'
+              }`}
+            >
+              {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* Máy Tính Khoa Học Mini (Pop-up Calculator) Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playClick();
+                setShowCalculator((prev) => !prev);
+              }}
+              title={showCalculator ? 'Ẩn máy tính bỏ túi' : 'Mở máy tính khoa học mini (Căn bậc hai, Phân số, Luỹ thừa, Lượng giác)'}
+              className={`inline-flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                showCalculator
+                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs ring-2 ring-indigo-400/40'
+                  : 'bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+              }`}
+            >
+              <CalculatorIcon className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Máy tính</span>
+            </button>
+
+            {/* Bảng Vẽ Nháp Trực Tiếp (Digital Scratchpad) Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playClick();
+                setShowScratchpad((prev) => !prev);
+              }}
+              title={showScratchpad ? 'Ẩn bảng nháp' : 'Mở bảng vẽ nháp trực tiếp (Hình học, Phép tính)'}
+              className={`inline-flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                showScratchpad
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs ring-2 ring-emerald-400/40'
+                  : 'bg-emerald-50 dark:bg-emerald-950/70 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Bảng nháp</span>
+            </button>
 
             {/* Dark Mode Toggle */}
             <button
@@ -973,6 +1105,27 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                             {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
                               const optId = (q.options && q.options[optIdx]) ? q.options[optIdx].id : letter;
                               const isSelected = answers[q.id] === optId;
+
+                              const pdfLetterStyles: Record<string, { selected: string; unselected: string }> = {
+                                A: {
+                                  selected: 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-300 dark:ring-indigo-700',
+                                  unselected: 'hover:border-indigo-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300'
+                                },
+                                B: {
+                                  selected: 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-300 dark:ring-blue-700',
+                                  unselected: 'hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-300'
+                                },
+                                C: {
+                                  selected: 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-300 dark:ring-emerald-700',
+                                  unselected: 'hover:border-emerald-300 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-300'
+                                },
+                                D: {
+                                  selected: 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-300 dark:ring-amber-700',
+                                  unselected: 'hover:border-amber-300 hover:bg-amber-50/50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-300'
+                                }
+                              };
+
+                              const style = pdfLetterStyles[letter] || pdfLetterStyles.A;
                               
                               return (
                                 <button
@@ -982,10 +1135,10 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                                     handleSelectOption(q.id, optId);
                                     setCurrentIndex(index);
                                   }}
-                                  className={`flex-1 py-1.5 rounded-xl text-xs font-extrabold border transition-all active:scale-90 ${
+                                  className={`flex-1 py-1.5 rounded-xl text-xs font-black border transition-all active:scale-90 cursor-pointer ${
                                     isSelected 
-                                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-1 ring-indigo-300' 
-                                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                      ? style.selected
+                                      : `bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 ${style.unselected}`
                                   }`}
                                 >
                                   {letter}
@@ -1199,44 +1352,86 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                         {currentQ.options.map((opt) => {
                           const isSelected = answers[currentQ.id] === opt.id;
-                          
-                          let optStyle = '';
-                          if (isSelected) {
-                            optStyle = isFocusMode
-                              ? 'border-indigo-500 bg-indigo-950/60 shadow-lg ring-2 ring-indigo-500 text-white'
-                              : 'border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-md ring-2 ring-indigo-500/20 text-indigo-950 dark:text-indigo-200';
-                          } else {
-                            optStyle = isFocusMode
-                              ? 'border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900 text-slate-200'
-                              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200';
-                          }
+                          const letter = opt.id.toUpperCase();
+
+                          // Thematic styling for options A, B, C, D
+                          const themes: Record<string, {
+                            badgeBgSelected: string;
+                            badgeBgUnselected: string;
+                            cardSelected: string;
+                            cardUnselected: string;
+                          }> = {
+                            A: {
+                              badgeBgSelected: 'bg-indigo-600 text-white shadow-md',
+                              badgeBgUnselected: 'bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
+                              cardSelected: isFocusMode
+                                ? 'border-indigo-500 bg-indigo-950/70 shadow-lg ring-2 ring-indigo-500 text-white'
+                                : 'border-indigo-600 bg-indigo-50/90 dark:bg-indigo-950/70 shadow-md ring-2 ring-indigo-500/25 text-indigo-950 dark:text-indigo-100',
+                              cardUnselected: isFocusMode
+                                ? 'border-slate-800 bg-slate-900/80 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-200'
+                                : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 text-slate-800 dark:text-slate-200'
+                            },
+                            B: {
+                              badgeBgSelected: 'bg-blue-600 text-white shadow-md',
+                              badgeBgUnselected: 'bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800',
+                              cardSelected: isFocusMode
+                                ? 'border-blue-500 bg-blue-950/70 shadow-lg ring-2 ring-blue-500 text-white'
+                                : 'border-blue-600 bg-blue-50/90 dark:bg-blue-950/70 shadow-md ring-2 ring-blue-500/25 text-blue-950 dark:text-blue-100',
+                              cardUnselected: isFocusMode
+                                ? 'border-slate-800 bg-slate-900/80 hover:border-blue-500/50 hover:bg-slate-900 text-slate-200'
+                                : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 text-slate-800 dark:text-slate-200'
+                            },
+                            C: {
+                              badgeBgSelected: 'bg-emerald-600 text-white shadow-md',
+                              badgeBgUnselected: 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+                              cardSelected: isFocusMode
+                                ? 'border-emerald-500 bg-emerald-950/70 shadow-lg ring-2 ring-emerald-500 text-white'
+                                : 'border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/70 shadow-md ring-2 ring-emerald-500/25 text-emerald-950 dark:text-emerald-100',
+                              cardUnselected: isFocusMode
+                                ? 'border-slate-800 bg-slate-900/80 hover:border-emerald-500/50 hover:bg-slate-900 text-slate-200'
+                                : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 text-slate-800 dark:text-slate-200'
+                            },
+                            D: {
+                              badgeBgSelected: 'bg-amber-600 text-white shadow-md',
+                              badgeBgUnselected: 'bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+                              cardSelected: isFocusMode
+                                ? 'border-amber-500 bg-amber-950/70 shadow-lg ring-2 ring-amber-500 text-white'
+                                : 'border-amber-600 bg-amber-50/90 dark:bg-amber-950/70 shadow-md ring-2 ring-amber-500/25 text-amber-950 dark:text-amber-100',
+                              cardUnselected: isFocusMode
+                                ? 'border-slate-800 bg-slate-900/80 hover:border-amber-500/50 hover:bg-slate-900 text-slate-200'
+                                : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-amber-400 hover:bg-amber-50/30 dark:hover:bg-amber-950/20 text-slate-800 dark:text-slate-200'
+                            }
+                          };
+
+                          const theme = themes[letter] || themes.A;
+                          const cardStyle = isSelected ? theme.cardSelected : theme.cardUnselected;
+                          const badgeStyle = isSelected ? theme.badgeBgSelected : theme.badgeBgUnselected;
 
                           return (
                             <button
                               key={opt.id}
                               type="button"
                               onClick={() => handleSelectOption(currentQ.id, opt.id)}
-                              className={`flex items-center p-3.5 sm:p-5 rounded-2xl border-2 text-left transition-all relative cursor-pointer active:scale-[0.99] select-none ${optStyle}`}
+                              className={`flex items-center p-3.5 sm:p-5 rounded-2xl border-2 text-left transition-all relative cursor-pointer active:scale-[0.98] select-none group ${cardStyle}`}
                               style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                             >
                               <div
-                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-sm mr-3 shrink-0 transition-colors ${
-                                  isSelected
-                                    ? 'bg-indigo-600 text-white shadow-md'
-                                    : isFocusMode
-                                    ? 'bg-slate-800 text-slate-300 border border-slate-700'
-                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600'
-                                }`}
+                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-sm mr-3.5 shrink-0 transition-transform group-hover:scale-105 ${badgeStyle}`}
                               >
                                 {opt.id}
                               </div>
 
-                              <div className="flex-1 font-medium text-sm sm:text-base select-none">
+                              <div className="flex-1 font-medium text-sm sm:text-base select-none leading-relaxed">
                                 <MathDisplay text={opt.text} />
                               </div>
 
+                              {/* Shortcut key indicator on desktop */}
+                              <span className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded-md border border-slate-300 dark:border-slate-700 text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+                                [{opt.id}]
+                              </span>
+
                               {isSelected && (
-                                <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center ml-2 shrink-0 shadow-sm animate-in zoom-in-50">
+                                <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center ml-2 shrink-0 shadow-sm animate-in zoom-in-50 duration-150">
                                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                                 </div>
                               )}
@@ -1291,9 +1486,42 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                     </div>
                   )}
 
+                  {/* Mobile Quick-Jump Question Strip */}
+                  <div className="lg:hidden pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
+                      <span>Bảng chuyển câu nhanh:</span>
+                      <span className="font-bold text-indigo-500">{answeredCount}/{questions.length}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
+                      {questions.map((q, idx) => {
+                        const isAns = !!answers[q.id] || !!studentSolutions[q.id] || (essayImagesByQuestion[q.id] && essayImagesByQuestion[q.id].length > 0);
+                        const isFlag = flaggedQuestions.includes(q.id);
+                        const isCur = idx === currentIndex;
+
+                        let mClass = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                        if (isAns) mClass = 'bg-indigo-600 text-white font-black';
+                        else if (isFlag) mClass = 'bg-amber-500 text-white font-black';
+                        if (isCur) mClass += ' ring-2 ring-indigo-500 font-black scale-110';
+
+                        return (
+                          <button
+                            key={q.id}
+                            onClick={() => {
+                              soundEffects.playNavigate();
+                              setCurrentIndex(idx);
+                            }}
+                            className={`min-w-8 h-8 rounded-lg text-xs font-bold shrink-0 flex items-center justify-center border transition-all cursor-pointer ${mClass}`}
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Bottom Card Navigation */}
                   <div
-                    className={`flex items-center justify-between mt-8 pt-6 border-t ${
+                    className={`flex items-center justify-between mt-6 pt-4 border-t ${
                       isFocusMode ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'
                     }`}
                   >
@@ -1314,6 +1542,9 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
                     <div className="text-xs font-bold text-slate-400 hidden sm:block">
                       Tiến độ: <strong className="text-indigo-500 font-extrabold">{answeredCount}</strong>/{questions.length} câu ({progressPercent}%)
+                      <span className="ml-2 text-[11px] text-slate-400 font-normal">
+                        (Phím tắt: <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">←</kbd> <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">→</kbd> <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">F</kbd>)
+                      </span>
                     </div>
 
                     {currentIndex < questions.length - 1 ? (
@@ -1386,6 +1617,43 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                   </span>
                 </div>
 
+                {/* Matrix Filter Tabs */}
+                <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 mb-3 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setMatrixFilter('all')}
+                    className={`flex-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      matrixFilter === 'all'
+                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Tất cả ({questions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatrixFilter('unanswered')}
+                    className={`flex-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      matrixFilter === 'unanswered'
+                        ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Chưa làm ({unansweredCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatrixFilter('flagged')}
+                    className={`flex-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      matrixFilter === 'flagged'
+                        ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Gắn cờ ({flaggedQuestions.length})
+                  </button>
+                </div>
+
                 {/* Status Color Legend */}
                 <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-3.5">
                   <span className="flex items-center gap-1.5">
@@ -1403,11 +1671,15 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                 </div>
 
                 {/* Question Number Grid */}
-                <div className="grid grid-cols-5 gap-1.5 max-h-[calc(100vh-320px)] overflow-y-auto pr-0.5 custom-scrollbar">
+                <div className="grid grid-cols-5 gap-1.5 max-h-[calc(100vh-360px)] overflow-y-auto pr-0.5 custom-scrollbar">
                   {questions.map((q, idx) => {
                     const isAnswered = !!answers[q.id] || !!studentSolutions[q.id] || (essayImagesByQuestion[q.id] && essayImagesByQuestion[q.id].length > 0);
                     const isFlagged = flaggedQuestions.includes(q.id);
                     const isCurrent = idx === currentIndex;
+
+                    // Filter logic
+                    if (matrixFilter === 'unanswered' && isAnswered) return null;
+                    if (matrixFilter === 'flagged' && !isFlagged) return null;
 
                     let btnClass = isFocusMode
                       ? 'bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white'
@@ -1425,14 +1697,25 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
                       btnClass += ' ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 font-black scale-105 border-2 border-indigo-600';
                     }
 
+                    const chosenOpt = answers[q.id];
+
                     return (
                       <button
                         key={q.id}
-                        onClick={() => setCurrentIndex(idx)}
+                        onClick={() => {
+                          soundEffects.playNavigate();
+                          setCurrentIndex(idx);
+                        }}
                         title={`Câu ${idx + 1}: ${isAnswered ? 'Đã làm' : 'Chưa làm'}${isFlagged ? ' (Đã gắn cờ)' : ''}`}
                         className={`h-9 rounded-xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer relative active:scale-95 ${btnClass}`}
                       >
-                        {idx + 1}
+                        <span>{idx + 1}</span>
+                        {/* Selected option badge */}
+                        {isAnswered && chosenOpt && chosenOpt !== 'TỰ_LUẬN' && (
+                          <span className="absolute -bottom-1 -right-1 text-[9px] font-mono px-1 py-0 bg-slate-900 text-white rounded-full font-black border border-white/40 leading-none">
+                            {chosenOpt}
+                          </span>
+                        )}
                         {isFlagged && (
                           <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                         )}
@@ -1680,6 +1963,51 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         onClose={() => setLightboxImageUrl(null)}
         title="Ảnh bài làm tự luận của thí sinh"
       />
+
+      {/* MÁY TÍNH KHOA HỌC MINI (POP-UP CALCULATOR) */}
+      <ScientificCalculatorModal
+        isOpen={showCalculator}
+        onClose={() => setShowCalculator(false)}
+        isExamMode={true}
+      />
+
+      {/* BẢNG VẼ NHÁP TRỰC TIẾP (DIGITAL SCRATCHPAD) */}
+      <DigitalScratchpadModal
+        isOpen={showScratchpad}
+        onClose={() => setShowScratchpad(false)}
+        title={`Bảng nháp • ${assignment.title}`}
+      />
+
+      {/* THANH CÔNG CỤ NHANH GÓC MÀN HÌNH (FLOATING ACTION DOCK) */}
+      <div className="fixed bottom-4 right-4 z-40 flex items-center space-x-2 select-none">
+        {!showCalculator && (
+          <button
+            onClick={() => {
+              soundEffects.playClick();
+              setShowCalculator(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-xl border border-white/20 text-xs font-bold transition-transform hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
+            title="Bật máy tính khoa học mini"
+          >
+            <CalculatorIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Máy tính</span>
+          </button>
+        )}
+
+        {!showScratchpad && (
+          <button
+            onClick={() => {
+              soundEffects.playClick();
+              setShowScratchpad(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl border border-white/20 text-xs font-bold transition-transform hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
+            title="Bật bảng vẽ nháp & hình học"
+          >
+            <Edit3 className="w-4 h-4" />
+            <span className="hidden sm:inline">Bảng nháp</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 };

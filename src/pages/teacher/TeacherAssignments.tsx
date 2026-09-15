@@ -3,6 +3,7 @@ import { Assignment, ClassRoom, Question, Submission } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { FileUploadModal } from '../../components/FileUploadModal';
 import { PrintExamModal } from '../../components/PrintExamModal';
+import { GenerateSimilarExamModal } from '../../components/GenerateSimilarExamModal';
 import { 
   BookOpen, 
   Plus, 
@@ -24,13 +25,16 @@ import {
   Shapes,
   Calculator,
   PieChart,
-  Tag
+  Tag,
+  Shuffle,
+  Edit3
 } from 'lucide-react';
 
 interface TeacherAssignmentsProps {
   assignments: Assignment[];
   classes: ClassRoom[];
   submissions: Submission[];
+  initialFilterClass?: string;
   onRefresh: () => void;
   onNavigate: (tab: string, params?: any) => void;
   onOpenShare: (assignment: Assignment) => void;
@@ -41,6 +45,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   assignments,
   classes,
   submissions,
+  initialFilterClass,
   onRefresh,
   onNavigate,
   onOpenShare,
@@ -48,12 +53,13 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
 }) => {
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterTopicCategory, setFilterTopicCategory] = useState<string>('all');
-  const [filterClass, setFilterClass] = useState<string>('all');
+  const [filterClass, setFilterClass] = useState<string>(initialFilterClass || 'all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'questions' | 'duration'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [showFileUploadModal, setShowFileUploadModal] = useState(false);
   const [printingAssignment, setPrintingAssignment] = useState<Assignment | null>(null);
+  const [similarExamAssignment, setSimilarExamAssignment] = useState<Assignment | null>(null);
 
   const handleImportQuestions = (questions: Question[]) => {
     onNavigate('create', {
@@ -128,7 +134,14 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
     return assignments
       .filter(a => {
         if (filterGrade !== 'all' && a.grade !== filterGrade) return false;
-        if (filterClass !== 'all' && a.classId !== filterClass) return false;
+        if (filterClass !== 'all') {
+          // Lớp cụ thể: khớp chính xác ID lớp, hoặc tên lớp (vd: '6A1'), hoặc bài tập giao cho toàn khối / 'all'
+          const isDirectClass = a.classId === filterClass;
+          const targetCls = classes.find(c => c.id === filterClass);
+          const isNameMatch = targetCls && (a.className === targetCls.name || a.classId === targetCls.name);
+          const isAllClass = a.classId === 'all' || !a.classId || a.className === 'Toàn khối';
+          if (!isDirectClass && !isNameMatch && !isAllClass) return false;
+        }
         if (filterTopicCategory !== 'all' && !matchesTopicCategory(a.topic, filterTopicCategory)) return false;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
@@ -136,7 +149,8 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
           const matchTopic = a.topic.toLowerCase().includes(q);
           const matchCode = a.assignmentCode.toLowerCase().includes(q);
           const matchGrade = `khối ${a.grade}`.includes(q) || `lớp ${a.grade}`.includes(q);
-          if (!matchTitle && !matchTopic && !matchCode && !matchGrade) return false;
+          const matchClassName = (a.className || '').toLowerCase().includes(q);
+          if (!matchTitle && !matchTopic && !matchCode && !matchGrade && !matchClassName) return false;
         }
         return true;
       })
@@ -387,13 +401,22 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(asg.id, asg.title)}
-                      className="text-slate-300 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-lg transition-colors cursor-pointer"
-                      title="Xóa bài tập"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => onNavigate('create', { editingAssignment: asg })}
+                        className="text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 p-1 rounded-lg transition-colors cursor-pointer"
+                        title="Sửa bài tập & Câu hỏi"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(asg.id, asg.title)}
+                        className="text-slate-300 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-lg transition-colors cursor-pointer"
+                        title="Xóa bài tập"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <h3 className="font-bold text-lg text-slate-900 dark:text-white line-clamp-1 mt-1">{asg.title}</h3>
@@ -445,7 +468,16 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="grid grid-cols-4 gap-1.5 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                  <button
+                    onClick={() => onNavigate('create', { editingAssignment: asg })}
+                    className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-200 font-bold rounded-xl transition-colors border border-amber-200 dark:border-amber-800 cursor-pointer shadow-2xs"
+                    title="Sửa câu hỏi, đề bài, đáp án và thang điểm"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Sửa câu hỏi</span>
+                  </button>
+
                   <button
                     onClick={() => setPrintingAssignment(asg)}
                     className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 font-bold rounded-xl transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
@@ -453,6 +485,15 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>In đề</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSimilarExamAssignment(asg)}
+                    className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 font-bold rounded-xl transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                    title="Tạo đề tương tự / Biến thể mã đề (102, B...)"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                    <span>Đề tương tự</span>
                   </button>
 
                   <button
@@ -501,6 +542,23 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
           isOpen={!!printingAssignment}
           onClose={() => setPrintingAssignment(null)}
           assignment={printingAssignment}
+        />
+      )}
+
+      {/* Generate Similar Exam Modal */}
+      {similarExamAssignment && (
+        <GenerateSimilarExamModal
+          isOpen={!!similarExamAssignment}
+          onClose={() => setSimilarExamAssignment(null)}
+          assignment={similarExamAssignment}
+          classes={classes}
+          onSuccess={() => {
+            onRefresh();
+          }}
+          onNavigateToEdit={(newAsg) => {
+            onRefresh();
+            onNavigate('results', { assignmentId: newAsg.id });
+          }}
         />
       )}
     </div>

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Submission, Assignment, Question } from '../../types';
 import { GradingService } from '../../services/gradingService';
 import { aiService } from '../../services/aiService';
 import { MathDisplay } from '../../components/MathDisplay';
 import { ImageLightboxModal } from '../../components/ImageLightboxModal';
+import { MistakeVaultModal } from '../../components/MistakeVaultModal';
+import { useMistakeVaultStore } from '../../store/useMistakeVaultStore';
 import { isEssayQuestion, getQuestionTypeLabel } from '../../utils/questionUtils';
 import { 
   Trophy, 
@@ -55,6 +57,20 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
 
   // Lightbox modal state
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+
+  // MỚI: Trạng thái hiển thị Sổ tay câu sai (Mistake Vault)
+  const [showMistakeVault, setShowMistakeVault] = useState<boolean>(false);
+
+  // Tự động đồng bộ câu sai vào Mistake Vault khi vào trang kết quả
+  useEffect(() => {
+    if (submission && submission.wrongCount > 0) {
+      try {
+        useMistakeVaultStore.getState().addMistakesFromSubmission(submission, assignment);
+      } catch (e) {
+        console.warn('Lỗi lưu câu sai vào Sổ tay câu sai:', e);
+      }
+    }
+  }, [submission, assignment]);
 
   const toggleExpand = (questionId: string) => {
     setExpandedCards(prev => ({
@@ -267,8 +283,60 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
             )}
           </div>
 
+          {/* SỔ TAY CÂU SAI BANNER (MISTAKE VAULT) */}
+          {submission.wrongCount > 0 ? (
+            <div className="mt-6 max-w-2xl mx-auto bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-indigo-500/10 border-2 border-rose-200 dark:border-rose-900 rounded-3xl p-5 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
+              <div className="flex items-start space-x-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-600 to-pink-600 text-white flex items-center justify-center font-bold shrink-0 shadow-md">
+                  <BookOpen className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-black text-sm text-slate-900 dark:text-white">
+                      Đã lưu {submission.wrongCount} câu sai vào Sổ tay câu sai!
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">
+                      Tự động gom nhặt
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Hệ thống đã lưu lại các câu chưa đúng. Bạn có thể luyện lại ngay kèm hướng dẫn gợi ý bước giải từ AI.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMistakeVault(true)}
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-black text-xs shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center space-x-1.5 shrink-0"
+              >
+                <Sparkles className="w-4 h-4 text-rose-200" />
+                <span>Luyện lại câu sai & Gợi ý AI</span>
+              </button>
+            </div>
+          ) : (
+            <div className="mt-6 max-w-2xl mx-auto bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-left flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-black text-sm text-emerald-900">
+                  Điểm tuyệt đối! Không có câu nào làm sai 🎉
+                </h4>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  Kiến thức bài này của bạn rất vững chắc. Bạn có thể mở Sổ tay câu sai bất cứ lúc nào để ôn lại các câu từ bài thi trước.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Quick Actions */}
           <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
+            <button
+              onClick={() => setShowMistakeVault(true)}
+              className="inline-flex items-center space-x-2 px-5 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Sổ tay câu sai {submission.wrongCount > 0 ? `(${submission.wrongCount})` : ''}</span>
+            </button>
             <button
               onClick={onRetake}
               className="inline-flex items-center space-x-2 px-5 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm transition-colors border border-indigo-200 shadow-xs cursor-pointer"
@@ -599,6 +667,12 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
         imageUrl={lightboxImageUrl}
         onClose={() => setLightboxImageUrl(null)}
         title="Xem ảnh bài làm tự luận"
+      />
+
+      {/* SỔ TAY CÂU SAI MODAL (MISTAKE VAULT) */}
+      <MistakeVaultModal
+        isOpen={showMistakeVault}
+        onClose={() => setShowMistakeVault(false)}
       />
     </div>
   );

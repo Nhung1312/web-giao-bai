@@ -7,6 +7,8 @@ import { FirestoreService } from '../../services/firestoreService';
 import { MathDisplay } from '../../components/MathDisplay';
 import { PrintExamModal } from '../../components/PrintExamModal';
 import { ImageLightboxModal } from '../../components/ImageLightboxModal';
+import { ClassCompetencyMatrix } from '../../components/ClassCompetencyMatrix';
+import { GenerateSimilarExamModal } from '../../components/GenerateSimilarExamModal';
 import { isEssayQuestion, getQuestionTypeLabel } from '../../utils/questionUtils';
 import { 
   BarChart3, 
@@ -35,7 +37,8 @@ import {
   Camera,
   Edit3,
   Save,
-  Check
+  Check,
+  Brain
 } from 'lucide-react';
 
 interface TeacherResultsProps {
@@ -56,12 +59,13 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
   const [selectedAsgId, setSelectedAsgId] = useState<string>(
     initialAssignmentId || assignments[0]?.id || ''
   );
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'analysis' | 'submissions' | 'unsubmitted'>('leaderboard');
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'competency' | 'analysis' | 'submissions' | 'unsubmitted'>('leaderboard');
   const [sortBy, setSortBy] = useState<'name' | 'score' | 'time' | 'submittedAt'>('score');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchStudent, setSearchStudent] = useState('');
   const [selectedSubmissionDetail, setSelectedSubmissionDetail] = useState<Submission | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showSimilarExamModal, setShowSimilarExamModal] = useState(false);
 
   // AI Weakness Analysis state
   const [aiReport, setAiReport] = useState<{
@@ -441,6 +445,18 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('competency')}
+            className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'competency'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Brain className="w-4 h-4" />
+            <span>Ma trận Năng lực &amp; Tư duy</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('analysis')}
             className={`px-3.5 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === 'analysis'
@@ -476,6 +492,15 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowSimilarExamModal(true)}
+            className="inline-flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200 transition-colors cursor-pointer"
+            title="Tạo đề tương tự / Biến thể mã đề chống quay cóp"
+          >
+            <Shuffle className="w-3.5 h-3.5" />
+            <span>Tạo đề tương tự</span>
+          </button>
+
           <button
             onClick={handleExportCSV}
             className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
@@ -725,7 +750,16 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
         </div>
       )}
 
-      {/* TAB 2: WEAKNESS & QUESTION MISTAKE ANALYTICS */}
+      {/* TAB 2: MA TRẬN NĂNG LỰC & CẤP ĐỘ TƯ DUY (CHUẨN BỘ GD&ĐT) */}
+      {activeTab === 'competency' && currentAssignment && (
+        <ClassCompetencyMatrix
+          assignment={currentAssignment}
+          submissions={currentSubmissions}
+          onOpenSimilarExamModal={() => setShowSimilarExamModal(true)}
+        />
+      )}
+
+      {/* TAB 3: WEAKNESS & QUESTION MISTAKE ANALYTICS */}
       {activeTab === 'analysis' && stats && (
         <div className="space-y-6">
           {/* Section: CÂU HỌC SINH SAI NHIỀU NHẤT */}
@@ -1403,6 +1437,19 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
           isOpen={showPrintModal}
           onClose={() => setShowPrintModal(false)}
           assignment={currentAssignment}
+        />
+      )}
+
+      {/* Modal: Generate Similar Exam */}
+      {showSimilarExamModal && currentAssignment && (
+        <GenerateSimilarExamModal
+          isOpen={showSimilarExamModal}
+          onClose={() => setShowSimilarExamModal(false)}
+          assignment={currentAssignment}
+          classes={classes}
+          onSuccess={(newAsg) => {
+            setSelectedAsgId(newAsg.id);
+          }}
         />
       )}
     </div>

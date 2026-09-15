@@ -34,6 +34,7 @@ interface TeacherCreateAssignmentProps {
   initialTitle?: string;
   initialGrade?: GradeLevel;
   initialMode?: 'text' | 'pdf'; // MỚI: Thêm prop nhận diện chế độ
+  editingAssignment?: Assignment; // MỚI: Cho phép sửa bài tập và câu hỏi đã có
   onSaveSuccess: (savedAssignment: Assignment) => void;
   onCancel: () => void;
 }
@@ -51,6 +52,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   initialTitle,
   initialGrade,
   initialMode, // MỚI: Nhận prop từ TeacherLayout
+  editingAssignment,
   onSaveSuccess,
   onCancel
 }) => {
@@ -60,21 +62,26 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   const paramGrade = searchParams.get('grade');
   const validParamGrade = (paramGrade === '6' || paramGrade === '7' || paramGrade === '8' || paramGrade === '9') ? (paramGrade as GradeLevel) : undefined;
 
-  const [title, setTitle] = useState(initialTitle || '');
-  const [grade, setGrade] = useState<GradeLevel>(validParamGrade || initialGrade || '7');
-  const [topic, setTopic] = useState('Đại số & Hình học THCS');
-  const [classId, setClassId] = useState<string>(classes[0]?.id || 'all');
-  const [durationMinutes, setDurationMinutes] = useState<number>(45);
+  const isEditing = !!editingAssignment;
+
+  const [title, setTitle] = useState(editingAssignment?.title || initialTitle || '');
+  const [grade, setGrade] = useState<GradeLevel>(editingAssignment?.grade || validParamGrade || initialGrade || '7');
+  const [topic, setTopic] = useState(editingAssignment?.topic || 'Đại số & Hình học THCS');
+  const [classId, setClassId] = useState<string>(editingAssignment?.classId || classes[0]?.id || 'all');
+  const [durationMinutes, setDurationMinutes] = useState<number>(editingAssignment?.durationMinutes ?? 45);
   const [deadline, setDeadline] = useState<string>(() => {
+    if (editingAssignment?.deadline) return editingAssignment.deadline;
     const d = new Date();
     d.setDate(d.getDate() + 7);
     return d.toISOString().split('T')[0];
   });
-  const [allowViewResult, setAllowViewResult] = useState<boolean>(true);
+  const [allowViewResult, setAllowViewResult] = useState<boolean>(editingAssignment?.allowViewResult ?? true);
 
   // --- TAB MODE SWITCHER ---
   // Khởi tạo tab dựa trên tham số truyền vào
-  const [examMode, setExamMode] = useState<'text' | 'pdf'>(initialMode || 'text');
+  const [examMode, setExamMode] = useState<'text' | 'pdf'>(
+    editingAssignment?.type === 'pdf' ? 'pdf' : (initialMode || 'text')
+  );
 
   // Lắng nghe nếu initialMode thay đổi thì ép chuyển tab ngay lập tức
   useEffect(() => {
@@ -85,12 +92,24 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
 
   // --- STATE DÀNH RIÊNG CHO CHẾ ĐỘ PDF ---
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>('');
-  const [pdfNumQuestions, setPdfNumQuestions] = useState<number>(40);
-  const [pdfAnswers, setPdfAnswers] = useState<Record<number, string>>({});
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>(editingAssignment?.pdfUrl || '');
+  const [pdfNumQuestions, setPdfNumQuestions] = useState<number>(editingAssignment?.questions?.length || 40);
+  const [pdfAnswers, setPdfAnswers] = useState<Record<number, string>>(() => {
+    if (editingAssignment?.type === 'pdf' && editingAssignment.questions) {
+      const map: Record<number, string> = {};
+      editingAssignment.questions.forEach((q, i) => {
+        map[q.order || (i + 1)] = q.correctAnswer;
+      });
+      return map;
+    }
+    return {};
+  });
 
   // --- STATE CHẾ ĐỘ TEXT CŨ ---
   const [questions, setQuestions] = useState<Question[]>(() => {
+    if (editingAssignment?.questions && editingAssignment.questions.length > 0) {
+      return editingAssignment.questions;
+    }
     if (initialQuestions && initialQuestions.length > 0) {
       return initialQuestions;
     }
@@ -358,38 +377,60 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     try {
       const targetClass = classes.find(c => c.id === classId);
       const className = targetClass ? targetClass.name : 'Toàn khối';
-      const assignmentCode = StorageService.generateAssignmentCode(grade, className);
 
-      const newAssignment: any = {
-        id: `asg_${Date.now()}`,
-        title: title.trim(),
-        grade,
-        topic: topic.trim(),
-        classId,
-        className,
-        questions: finalQuestions,
-        durationMinutes,
-        deadline,
-        allowViewResult,
-        assignmentCode,
-        createdAt: new Date().toISOString(),
-        isPublished: true,
-        type: finalType, // Ép cờ type = pdf hoặc text
-        pdfUrl: finalPdfUrl
-      };
+      let savedAssignment: Assignment;
+
+      if (isEditing && editingAssignment) {
+        // CẬP NHẬT BÀI TẬP VÀ CÂU HỎI HIỆN CÓ
+        savedAssignment = {
+          ...editingAssignment,
+          title: title.trim(),
+          grade,
+          topic: topic.trim(),
+          classId,
+          className,
+          questions: finalQuestions,
+          durationMinutes: Number(durationMinutes) || 0,
+          deadline,
+          allowViewResult,
+          type: finalType,
+          pdfUrl: finalPdfUrl || editingAssignment.pdfUrl
+        };
+      } else {
+        // TẠO BÀI TẬP MỚI
+        const assignmentCode = StorageService.generateAssignmentCode(grade, className);
+        savedAssignment = {
+          id: `asg_${Date.now()}`,
+          title: title.trim(),
+          grade,
+          topic: topic.trim(),
+          classId,
+          className,
+          questions: finalQuestions,
+          durationMinutes: Number(durationMinutes) || 0,
+          deadline,
+          allowViewResult,
+          assignmentCode,
+          createdAt: new Date().toISOString(),
+          isPublished: true,
+          type: finalType,
+          pdfUrl: finalPdfUrl
+        };
+      }
 
       // 1. Save to Cloud Firestore
       try {
-        await FirestoreService.saveExam(newAssignment as Assignment, user || undefined);
+        await FirestoreService.saveExam(savedAssignment, user || undefined);
       } catch (firestoreErr) {
         console.warn('Lưu Firestore thất bại, lưu dự phòng LocalStorage:', firestoreErr);
       }
 
       // 2. Save to Local Cache
-      StorageService.saveAssignment(newAssignment as Assignment);
+      StorageService.saveAssignment(savedAssignment);
 
       setIsSaving(false);
-      onSaveSuccess(newAssignment as Assignment);
+      alert(isEditing ? 'Đã lưu cập nhật bài tập và câu hỏi thành công!' : 'Tạo bài tập thành công!');
+      onSaveSuccess(savedAssignment);
     } catch (err) {
       console.error('Lỗi khi lưu đề thi:', err);
       setIsSaving(false);
@@ -402,9 +443,20 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Tạo bài tập & Đề kiểm tra mới</h1>
-          <p className="text-sm text-slate-500">
-            Soạn đề thi linh hoạt qua việc nhập từng câu hoặc tải file PDF.
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {isEditing ? 'Chỉnh sửa bài tập & Câu hỏi' : 'Tạo bài tập & Đề kiểm tra mới'}
+            </h1>
+            {isEditing && editingAssignment && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                Mã: {editingAssignment.assignmentCode}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            {isEditing
+              ? `Chỉnh sửa nội dung đề bài, đáp án đúng, thang điểm và các câu hỏi của bài tập.`
+              : 'Soạn đề thi linh hoạt qua việc nhập từng câu hoặc tải file PDF.'}
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -412,7 +464,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50"
+            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50 cursor-pointer"
           >
             Hủy
           </button>
@@ -429,7 +481,7 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                <span>LƯU BÀI TẬP</span>
+                <span>{isEditing ? 'LƯU CẬP NHẬT CÂU HỎI' : 'LƯU BÀI TẬP'}</span>
               </>
             )}
           </button>

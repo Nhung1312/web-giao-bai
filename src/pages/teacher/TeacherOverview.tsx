@@ -11,7 +11,8 @@ import {
   BarChart3, 
   ArrowRight,
   Sparkles,
-  Layers
+  Layers,
+  Edit3
 } from 'lucide-react';
 
 interface TeacherOverviewProps {
@@ -218,16 +219,24 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
                         <button
+                          onClick={() => onNavigate('create', { editingAssignment: asg })}
+                          title="Sửa đề bài & câu hỏi"
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs rounded-lg transition-colors border border-amber-200 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Sửa câu hỏi</span>
+                        </button>
+                        <button
                           onClick={() => onOpenShare(asg)}
                           title="Lấy mã QR & Link"
-                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <Share2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => onNavigate('results', { assignmentId: asg.id })}
                           title="Xem kết quả & Thống kê"
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg transition-colors"
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg transition-colors cursor-pointer"
                         >
                           <BarChart3 className="w-3.5 h-3.5" />
                           <span>Kết quả</span>

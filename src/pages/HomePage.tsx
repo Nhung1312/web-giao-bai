@@ -25,17 +25,17 @@ interface HomePageProps {
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
-  const [inputCode, setInputCode] = useState('');
+  const [assignmentCode, setAssignmentCode] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleStartWithCode = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputCode.trim()) {
+    if (!assignmentCode.trim()) {
       setError('Vui lòng nhập mã bài tập.');
       return;
     }
-    navigate(`/join?code=${encodeURIComponent(inputCode.trim().toUpperCase())}`);
+    navigate(`/join?code=${encodeURIComponent(assignmentCode.trim().toUpperCase())}`);
   };
 
   const sampleAssignment = assignments[0];
@@ -62,9 +62,9 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
               <div className="relative flex-1">
                 <input
                   type="text"
-                  value={inputCode}
+                  value={assignmentCode}
                   onChange={(e) => {
-                    setInputCode(e.target.value.toUpperCase());
+                    setAssignmentCode(e.target.value);
                     setError('');
                   }}
                   placeholder="Nhập mã bài tập (VD: TOAN6A1-8K4P)..."
@@ -114,7 +114,7 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                  Tạo đề, xuất file PDF, quản lý lớp & bảng điểm
+                  Tạo đề, xuất file PDF, quản lý lớp &amp; bảng điểm
                 </p>
               </div>
             </Link>
@@ -133,7 +133,7 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                  Vào phòng thi, tự luyện tập & nhận lời giải
+                  Vào phòng thi, tự luyện tập &amp; nhận lời giải
                 </p>
               </div>
             </Link>
@@ -158,7 +158,6 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
             {gradeList.map((grade) => {
               const meta = ALL_GRADE_METAS[grade];
               const count = assignments.filter(a => a.grade === grade).length;
-
               return (
                 <div
                   key={grade}
@@ -207,7 +206,7 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
               <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="font-bold text-xs text-slate-900 dark:text-white">Tự chấm & Lời giải</h4>
+              <h4 className="font-bold text-xs text-slate-900 dark:text-white">Tự chấm &amp; Lời giải</h4>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                 Chấm điểm tức thì sau khi nộp, giải thích chi tiết từng bước.
               </p>
@@ -219,7 +218,7 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
               <BarChart3 className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="font-bold text-xs text-slate-900 dark:text-white">Phổ điểm & Xếp hạng</h4>
+              <h4 className="font-bold text-xs text-slate-900 dark:text-white">Phổ điểm &amp; Xếp hạng</h4>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                 Vinh danh Top 3, thống kê câu hỏi học sinh hay nhầm lẫn.
               </p>
@@ -232,7 +231,7 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 py-3 text-center text-[11px] text-slate-500 dark:text-slate-400">
         <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-1.5">
           <p className="font-medium text-slate-700 dark:text-slate-300">
-            TOÁN THCS – Nền tảng Ôn tập & Kiểm tra Toán Lớp 6, 7, 8, 9
+            TOÁN THCS – Nền tảng Ôn tập &amp; Kiểm tra Toán Lớp 6, 7, 8, 9
           </p>
           <div className="flex items-center space-x-2.5 text-slate-500">
             <Link to="/grade/6" className="hover:text-indigo-600">Lớp 6</Link>

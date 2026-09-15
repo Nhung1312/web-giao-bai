@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClassRoom, Student, GradeLevel } from '../../types';
+import { ClassRoom, Student, GradeLevel, Assignment } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { 
   Users, 
@@ -12,15 +12,22 @@ import {
   Check, 
   X, 
   AlertCircle,
-  GraduationCap
+  GraduationCap,
+  BookOpen,
+  Calendar,
+  Clock,
+  HelpCircle,
+  ArrowRight
 } from 'lucide-react';
 
 interface TeacherClassesProps {
   classes: ClassRoom[];
+  assignments?: Assignment[];
   onRefresh: () => void;
+  onNavigate?: (tab: string, params?: any) => void;
 }
 
-export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefresh }) => {
+export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignments = [], onRefresh, onNavigate }) => {
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [showImportExcelModal, setShowImportExcelModal] = useState(false);
@@ -39,8 +46,19 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
   // Excel paste text
   const [excelPasteText, setExcelPasteText] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [classSubTab, setClassSubTab] = useState<'students' | 'assignments'>('students');
 
   const currentClass = classes.find(c => c.id === selectedClassId) || classes[0];
+
+  const classAssignments = assignments.filter(a => 
+    currentClass && (
+      a.classId === currentClass.id || 
+      a.classId === currentClass.name || 
+      a.className === currentClass.name || 
+      a.classId === 'all' || 
+      !a.classId
+    )
+  );
 
   const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,36 +212,40 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
             Danh sách lớp ({classes.length})
           </div>
 
-          {classes.map((cls) => {
-            const isSelected = cls.id === currentClass?.id;
-            return (
-              <div
-                key={cls.id}
-                onClick={() => setSelectedClassId(cls.id)}
-                className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'
-                    }`}
-                  >
-                    {cls.grade}
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm">Lớp {cls.name}</div>
-                    <div className={`text-xs ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>
-                      {cls.students?.length || 0} học sinh
+          {classes.length === 0 ? (
+            <div className="text-center py-8 px-2 text-xs text-slate-400">
+              Chưa có lớp học nào. Bấm nút <strong>"+ Thêm lớp học mới"</strong> ở trên để tạo lớp.
+            </div>
+          ) : (
+            classes.map((cls) => {
+              const isSelected = cls.id === currentClass?.id;
+              return (
+                <div
+                  key={cls.id}
+                  onClick={() => setSelectedClassId(cls.id)}
+                  className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'
+                      }`}
+                    >
+                      {cls.grade}
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm">Lớp {cls.name}</div>
+                      <div className={`text-xs ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>
+                        {cls.students?.length || 0} học sinh
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Delete class */}
-                {classes.length > 1 && (
+                  {/* Delete class */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -236,10 +258,10 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Right column: Class Details & Student List */}
@@ -266,10 +288,10 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setShowImportExcelModal(true)}
-                    className="inline-flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200 transition-colors"
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200 transition-colors cursor-pointer"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
                     <span>Dán từ Excel</span>
@@ -277,7 +299,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
 
                   <button
                     onClick={() => setShowAddStudentModal(true)}
-                    className="inline-flex items-center space-x-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-colors"
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-colors cursor-pointer"
                   >
                     <UserPlus className="w-4 h-4" />
                     <span>+ Thêm học sinh</span>
@@ -285,83 +307,226 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, onRefre
                 </div>
               </div>
 
-              {/* Search & Student List */}
-              <div>
-                <div className="flex items-center justify-between gap-4 mb-4">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchKeyword}
-                      onChange={(e) => setSearchKeyword(e.target.value)}
-                      placeholder="Tìm kiếm học sinh theo tên hoặc mã..."
-                      className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                    />
-                  </div>
-                  <span className="text-xs text-slate-400 font-medium hidden sm:inline">
-                    Hiển thị {filteredStudents.length} / {currentClass.students?.length || 0}
-                  </span>
-                </div>
+              {/* Sub-tabs: Học sinh vs Bài tập đã giao */}
+              <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+                <button
+                  onClick={() => setClassSubTab('students')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    classSubTab === 'students'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Danh sách học sinh ({currentClass.students?.length || 0})</span>
+                </button>
 
-                {filteredStudents.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-600">Chưa có học sinh nào</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Bấm "+ Thêm học sinh" hoặc "Dán từ Excel" để bổ sung danh sách lớp.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-bold border-y border-slate-200">
-                          <th className="py-2.5 px-3 text-center w-12">STT</th>
-                          <th className="py-2.5 px-3">Mã HS</th>
-                          <th className="py-2.5 px-4">Họ và tên</th>
-                          <th className="py-2.5 px-3 text-center">Giới tính</th>
-                          <th className="py-2.5 px-3 text-right">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredStudents.map((st, idx) => (
-                          <tr key={st.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-2.5 px-3 text-center text-xs font-semibold text-slate-400">
-                              {idx + 1}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-xs font-bold text-indigo-700">
-                              {st.code || `HS${idx + 1}`}
-                            </td>
-                            <td className="py-2.5 px-4 font-semibold text-slate-800">
-                              {st.name}
-                            </td>
-                            <td className="py-2.5 px-3 text-center text-xs">
-                              <span
-                                className={`px-2 py-0.5 rounded-full font-medium ${
-                                  st.gender === 'Nữ'
-                                    ? 'bg-rose-50 text-rose-700 border border-rose-100'
-                                    : 'bg-blue-50 text-blue-700 border border-blue-100'
-                                }`}
-                              >
-                                {st.gender || 'Nam'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <button
-                                onClick={() => handleDeleteStudent(st.id)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
-                                title="Xóa học sinh"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <button
+                  onClick={() => setClassSubTab('assignments')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    classSubTab === 'assignments'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Bài tập & Sửa câu hỏi ({classAssignments.length})</span>
+                </button>
               </div>
+
+              {/* TAB 1: DANH SÁCH HỌC SINH */}
+              {classSubTab === 'students' && (
+                <div>
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div className="relative flex-1 max-w-sm">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={searchKeyword}
+                        onChange={(e) => setSearchKeyword(e.target.value)}
+                        placeholder="Tìm kiếm học sinh theo tên hoặc mã..."
+                        className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+                      Hiển thị {filteredStudents.length} / {currentClass.students?.length || 0}
+                    </span>
+                  </div>
+
+                  {filteredStudents.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-semibold text-slate-600">Chưa có học sinh nào</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Bấm "+ Thêm học sinh" hoặc "Dán từ Excel" để bổ sung danh sách lớp.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-bold border-y border-slate-200">
+                            <th className="py-2.5 px-3 text-center w-12">STT</th>
+                            <th className="py-2.5 px-3">Mã HS</th>
+                            <th className="py-2.5 px-4">Họ và tên</th>
+                            <th className="py-2.5 px-3 text-center">Giới tính</th>
+                            <th className="py-2.5 px-3 text-right">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredStudents.map((st, idx) => (
+                            <tr key={st.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="py-2.5 px-3 text-center text-xs font-semibold text-slate-400">
+                                {idx + 1}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-xs font-bold text-indigo-700">
+                                {st.code || `HS${idx + 1}`}
+                              </td>
+                              <td className="py-2.5 px-4 font-semibold text-slate-800">
+                                {st.name}
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-xs">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full font-medium ${
+                                    st.gender === 'Nữ'
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                                      : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                  }`}
+                                >
+                                  {st.gender || 'Nam'}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <button
+                                  onClick={() => handleDeleteStudent(st.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
+                                  title="Xóa học sinh"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: BÀI TẬP VÀ CHỈNH SỬA CÂU HỎI TRỰC TIẾP */}
+              {classSubTab === 'assignments' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl">
+                    <div className="text-xs text-amber-900">
+                      <span className="font-bold">Các bài tập & đề kiểm tra áp dụng cho lớp {currentClass.name}:</span>
+                      <p className="text-amber-700 text-[11px] mt-0.5">
+                        Thầy cô có thể bấm nút <strong>"Sửa câu hỏi"</strong> để chỉnh sửa đề bài, đáp án đúng, gợi ý hoặc thang điểm bất kỳ lúc nào.
+                      </p>
+                    </div>
+                    {onNavigate && (
+                      <button
+                        onClick={() => onNavigate('create')}
+                        className="inline-flex items-center space-x-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Soạn bài tập mới</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {classAssignments.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <BookOpen className="w-9 h-9 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-semibold text-slate-700">Chưa có bài tập nào cho lớp {currentClass.name}</p>
+                      <p className="text-xs text-slate-400 mt-1 mb-3">
+                        Tạo bài tập mới hoặc gán bài tập hiện có cho lớp này.
+                      </p>
+                      {onNavigate && (
+                        <button
+                          onClick={() => onNavigate('create')}
+                          className="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Tạo bài tập đầu tiên</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {classAssignments.map((asg) => (
+                        <div
+                          key={asg.id}
+                          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-amber-300 hover:shadow-md transition-all flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-indigo-100 text-indigo-800">
+                                  Khối {asg.grade}
+                                </span>
+                                <span className="font-mono font-black text-[11px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                                  {asg.assignmentCode}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600">
+                                  {asg.type === 'pdf' ? 'Đề PDF' : 'Trắc nghiệm'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <h4 className="font-bold text-sm text-slate-900 line-clamp-2 mb-1.5">
+                              {asg.title}
+                            </h4>
+                            <p className="text-xs text-slate-500 line-clamp-1 mb-3">
+                              {asg.topic || 'Toán học THCS'}
+                            </p>
+
+                            <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+                              <span className="inline-flex items-center space-x-1">
+                                <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                                <strong className="text-slate-800">{asg.questions.length}</strong> câu
+                              </span>
+                              <span className="inline-flex items-center space-x-1">
+                                <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                                <span>{asg.durationMinutes ? `${asg.durationMinutes} phút` : 'Tự do'}</span>
+                              </span>
+                              {asg.deadline && (
+                                <span className="inline-flex items-center space-x-1">
+                                  <Calendar className="w-3.5 h-3.5 text-rose-500" />
+                                  <span>Hạn: {asg.deadline}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                            {onNavigate && (
+                              <button
+                                onClick={() => onNavigate('create', { editingAssignment: asg })}
+                                className="flex-1 inline-flex items-center justify-center space-x-1.5 py-2 px-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer"
+                                title="Mở trình soạn thảo để sửa đề bài, câu hỏi, phương án và đáp án đúng"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>SỬA CÂU HỎI</span>
+                              </button>
+                            )}
+
+                            {onNavigate && (
+                              <button
+                                onClick={() => onNavigate('assignments', { filterClass: currentClass.id })}
+                                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                                title="Xem trong danh sách bài tập đầy đủ"
+                              >
+                                <ArrowRight className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <div className="text-center py-12 text-slate-400">

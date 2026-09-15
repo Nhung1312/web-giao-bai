@@ -33,6 +33,7 @@ interface TeacherLayoutProps {
   onOpenShare: (assignment: Assignment) => void;
   onTestAssignment: (assignment: Assignment) => void;
   onResetData: () => void;
+  onClearDemoData?: () => void;
 }
 
 export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
@@ -42,7 +43,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
   onRefreshData,
   onOpenShare,
   onTestAssignment,
-  onResetData
+  onResetData,
+  onClearDemoData
 }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -215,7 +217,12 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         )}
 
         {activeTab === 'classes' && (
-          <TeacherClasses classes={classes} onRefresh={onRefreshData} />
+          <TeacherClasses
+            classes={classes}
+            assignments={assignments}
+            onRefresh={onRefreshData}
+            onNavigate={handleNavigate}
+          />
         )}
 
         {activeTab === 'assignments' && (
@@ -223,6 +230,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
             assignments={assignments}
             classes={classes}
             submissions={submissions}
+            initialFilterClass={tabParams.filterClass}
             onRefresh={onRefreshData}
             onNavigate={handleNavigate}
             onOpenShare={onOpenShare}
@@ -233,6 +241,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         {activeTab === 'create' && (
           <TeacherCreateAssignment
             classes={classes}
+            editingAssignment={tabParams.editingAssignment}
             initialQuestions={tabParams.initialQuestions}
             initialTitle={tabParams.initialTitle}
             initialGrade={tabParams.initialGrade}
@@ -257,7 +266,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         )}
 
         {activeTab === 'settings' && (
-          <TeacherSettings onResetData={onResetData} />
+          <TeacherSettings onResetData={onResetData} onClearDemoData={onClearDemoData} />
         )}
       </main>
 

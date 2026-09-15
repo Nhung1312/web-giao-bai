@@ -201,3 +201,22 @@ export interface PaymentRequest {
   status: 'pending' | 'approved';
   createdAt: string;
 }
+
+// ==========================================
+// MỚI: SỔ TAY CÂU SAI (MISTAKE VAULT)
+// ==========================================
+export interface MistakeRecord {
+  id: string; // `${assignmentId}_${questionId}`
+  assignmentId: string;
+  assignmentTitle: string;
+  assignmentCode?: string;
+  grade: GradeLevel;
+  question: Question;
+  studentAnswer: string; // Đáp án học sinh đã chọn sai
+  addedAt: string; // ISO date
+  mastered: boolean; // true nếu học sinh đã luyện lại và chọn đúng
+  lastPracticedAt?: string;
+  practiceCount: number; // Số lần đã thử luyện lại
+  aiHint?: string; // Gợi ý bước giải lưu trữ
+}
+

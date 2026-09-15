@@ -14,6 +14,8 @@ import {
 import { GradeLevel } from '../types';
 import { ALL_GRADE_METAS } from '../data';
 import { useLearningProgressStore } from '../store/useLearningProgressStore';
+import { useMistakeVaultStore } from '../store/useMistakeVaultStore';
+import { MistakeVaultModal } from './MistakeVaultModal';
 
 interface MobileBottomNavProps {
   onOpenProgress?: () => void;
@@ -23,6 +25,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenProgress
   const location = useLocation();
   const navigate = useNavigate();
   const [showGradeSheet, setShowGradeSheet] = useState(false);
+  const [showMistakeModal, setShowMistakeModal] = useState(false);
+
+  const mistakes = useMistakeVaultStore((state) => state.mistakes);
+  const unmasteredCount = mistakes.filter((m) => !m.mastered).length;
 
   const { getTotalPointsEarned, getTotalCompletedCount } = useLearningProgressStore();
   const totalPoints = getTotalPointsEarned();
@@ -92,6 +98,36 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenProgress
                 );
               })}
             </div>
+
+            {/* Sổ tay câu sai Shortcut in Mobile Sheet */}
+            <button
+              onClick={() => {
+                setShowGradeSheet(false);
+                setShowMistakeModal(true);
+              }}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-indigo-500/10 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between cursor-pointer active:scale-98 transition-transform text-left"
+            >
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-900 dark:text-white">
+                    Sổ tay câu sai (Mistake Vault)
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Luyện lại câu sai kèm gợi ý bước giải từ AI
+                  </div>
+                </div>
+              </div>
+              {unmasteredCount > 0 ? (
+                <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white font-mono text-[10px] font-black">
+                  {unmasteredCount} câu
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-bold">Mở sổ tay →</span>
+              )}
+            </button>
           </div>
         </div>
       )}
@@ -172,6 +208,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenProgress
           </Link>
         </div>
       </nav>
+
+      {/* SỔ TAY CÂU SAI MODAL */}
+      <MistakeVaultModal
+        isOpen={showMistakeModal}
+        onClose={() => setShowMistakeModal(false)}
+      />
     </>
   );
 };

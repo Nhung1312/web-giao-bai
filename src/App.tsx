@@ -96,6 +96,14 @@ function AppContent() {
     }
   };
 
+  const handleClearDemoData = () => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa hết toàn bộ dữ liệu mẫu (các đề thi, lớp học và kết quả nộp bài mẫu có sẵn)?\n\nLưu ý: Mọi bài tập hoặc lớp học do Thầy/Cô tự tạo thêm sẽ được giữ nguyên an toàn.')) {
+      const result = StorageService.clearDemoData();
+      refreshAllData();
+      alert(`Đã xóa sạch dữ liệu mẫu thành công!\n• Đề mẫu đã xóa: ${result.deletedAssignments}\n• Lớp mẫu đã xóa: ${result.deletedClasses}\n• Lượt nộp mẫu đã xóa: ${result.deletedSubmissions}`);
+    }
+  };
+
   const handleStartExam = (
     assignment: Assignment,
     studentName: string,
@@ -152,7 +160,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {/* Top Navbar */}
-      <Navbar onResetData={handleResetData} />
+      <Navbar onResetData={handleResetData} onClearDemoData={handleClearDemoData} />
 
       {/* Top Zustand Learning Progress Bar (Sticky / Header Status Bar) */}
       {!isTakingExam && (
@@ -244,6 +252,7 @@ function AppContent() {
                   onOpenShare={(asg) => setShareAssignment(asg)}
                   onTestAssignment={handleTestAssignmentFromTeacher}
                   onResetData={handleResetData}
+                  onClearDemoData={handleClearDemoData}
                 />
               </PrivateRoute>
             }

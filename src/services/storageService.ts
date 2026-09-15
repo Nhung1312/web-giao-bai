@@ -158,12 +158,63 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   }
 
+  /**
+   * Xóa toàn bộ dữ liệu mẫu (các đề kiểm tra, lớp học và kết quả nộp bài mẫu).
+   * Các bài tập, đề kiểm tra hoặc lớp học do Thầy/Cô tự tạo sẽ được giữ lại an toàn.
+   */
+  static clearDemoData(): { deletedAssignments: number; deletedClasses: number; deletedSubmissions: number } {
+    this.initDemoData();
+
+    // Tập hợp ID các đề mẫu gốc
+    const sampleAssignmentIds = new Set(INITIAL_ALL_ASSIGNMENTS.map(a => a.id));
+    const isSampleAssignment = (a: Assignment) =>
+      sampleAssignmentIds.has(a.id) ||
+      a.id.startsWith('asg_toan6_') ||
+      a.id.startsWith('asg_toan7_') ||
+      a.id.startsWith('asg_toan8_') ||
+      a.id.startsWith('asg_toan9_');
+
+    // Tập hợp ID các lớp mẫu gốc
+    const sampleClassIds = new Set(INITIAL_CLASSES.map(c => c.id));
+    const isSampleClass = (c: ClassRoom) =>
+      sampleClassIds.has(c.id) ||
+      ['class_6a1', 'class_7a2', 'class_8a1', 'class_9a3'].includes(c.id);
+
+    // Dữ liệu hiện tại
+    const currentAssignments = this.getAssignments();
+    const currentClasses = this.getClasses();
+    const currentSubmissions = this.getSubmissions();
+
+    // Lọc bỏ toàn bộ dữ liệu mẫu
+    const remainingAssignments = currentAssignments.filter(a => !isSampleAssignment(a));
+    const remainingClasses = currentClasses.filter(c => !isSampleClass(c));
+    const remainingSubmissions = currentSubmissions.filter(s => 
+      !s.id.startsWith('sub_demo_') && !isSampleAssignment({ id: s.assignmentId } as any)
+    );
+
+    const deletedAssignments = currentAssignments.length - remainingAssignments.length;
+    const deletedClasses = currentClasses.length - remainingClasses.length;
+    const deletedSubmissions = currentSubmissions.length - remainingSubmissions.length;
+
+    // Lưu lại vào LocalStorage
+    localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(remainingClasses));
+    localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(remainingAssignments));
+    localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(remainingSubmissions));
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+
+    return {
+      deletedAssignments,
+      deletedClasses,
+      deletedSubmissions
+    };
+  }
+
   // --- CLASSES ---
   static getClasses(): ClassRoom[] {
     this.initDemoData();
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CLASSES);
-      return data ? JSON.parse(data) : INITIAL_CLASSES;
+      return data !== null ? JSON.parse(data) : INITIAL_CLASSES;
     } catch {
       return INITIAL_CLASSES;
     }
@@ -194,7 +245,7 @@ export class StorageService {
     this.initDemoData();
     try {
       const data = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
-      return data ? JSON.parse(data) : INITIAL_ASSIGNMENTS;
+      return data !== null ? JSON.parse(data) : INITIAL_ASSIGNMENTS;
     } catch {
       return INITIAL_ASSIGNMENTS;
     }
@@ -235,7 +286,7 @@ export class StorageService {
     this.initDemoData();
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SUBMISSIONS);
-      return data ? JSON.parse(data) : INITIAL_SUBMISSIONS;
+      return data !== null ? JSON.parse(data) : INITIAL_SUBMISSIONS;
     } catch {
       return INITIAL_SUBMISSIONS;
     }

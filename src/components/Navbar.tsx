@@ -1,22 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, User as UserIcon, GraduationCap, RotateCcw, Sparkles, Moon, Sun, LogOut, LogIn } from 'lucide-react';
+import { BookOpen, User as UserIcon, GraduationCap, RotateCcw, Sparkles, Moon, Sun, LogOut, LogIn, Trash2, BookmarkCheck } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { GradeLevel } from '../types';
 import { getAppLogo } from '../utils/logoHelper';
+import { MistakeVaultModal } from './MistakeVaultModal';
+import { useMistakeVaultStore } from '../store/useMistakeVaultStore';
 
 interface NavbarProps {
   onResetData: () => void;
+  onClearDemoData?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onResetData, onClearDemoData }) => {
   const { isDark, toggleTheme } = useTheme();
   const { user, logout, isAuthenticated } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
   const [currentLogo, setCurrentLogo] = useState<string>(getAppLogo());
+  const [showMistakeVault, setShowMistakeVault] = useState<boolean>(false);
+
+  const mistakes = useMistakeVaultStore((state) => state.mistakes);
+  const unmasteredCount = mistakes.filter((m) => !m.mastered).length;
 
   useEffect(() => {
     const handleLogoUpdate = (e: any) => {
@@ -108,6 +115,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
               )}
             </button>
 
+            {/* Sổ tay câu sai (Mistake Vault) */}
+            <button
+              onClick={() => setShowMistakeVault(true)}
+              title="Mở Sổ tay câu sai (Luyện lại các câu làm chưa đúng)"
+              className={`inline-flex items-center space-x-1 sm:space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                unmasteredCount > 0
+                  ? 'bg-rose-50 dark:bg-rose-950/80 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs'
+                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              <BookmarkCheck className={`w-3.5 h-3.5 ${unmasteredCount > 0 ? 'text-rose-500' : 'text-slate-400'}`} />
+              <span className="hidden lg:inline">Sổ tay câu sai</span>
+              {unmasteredCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white font-mono text-[10px] font-black">
+                  {unmasteredCount}
+                </span>
+              )}
+            </button>
+
             {/* Quick Demo Reset (Desktop only to save space on mobile) */}
             <button
               onClick={onResetData}
@@ -117,6 +143,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
               <RotateCcw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span>Dữ liệu mẫu</span>
             </button>
+
+            {/* Quick Clear Demo Data */}
+            {onClearDemoData && (
+              <button
+                onClick={onClearDemoData}
+                title="Xóa toàn bộ các đề thi, lớp học và kết quả mẫu có sẵn"
+                className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-800/80 transition-colors cursor-pointer active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
+                <span>Xóa dữ liệu mẫu</span>
+              </button>
+            )}
 
             {/* Desktop Role switchers */}
             <div className="hidden md:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -192,6 +230,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData }) => {
           </div>
         </div>
       </div>
+
+      {/* SỔ TAY CÂU SAI MODAL */}
+      <MistakeVaultModal
+        isOpen={showMistakeVault}
+        onClose={() => setShowMistakeVault(false)}
+      />
     </header>
   );
 };

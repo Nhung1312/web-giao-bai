@@ -19,14 +19,16 @@ import {
   ShieldCheck,
   RefreshCw,
   HelpCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Trash2
 } from 'lucide-react';
 
 interface TeacherSettingsProps {
   onResetData: () => void;
+  onClearDemoData?: () => void;
 }
 
-export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData }) => {
+export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, onClearDemoData }) => {
   // Gemini API state
   const hybridAi = aiService as HybridAIService;
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
@@ -486,31 +488,43 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData })
         </div>
       </div>
 
-      {/* SECTION 3: DEMO SEED RESET */}
+      {/* SECTION 3: DEMO SEED RESET & CLEAR */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
             <RotateCcw className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="font-bold text-base text-slate-900">Khôi phục Dữ liệu Mẫu (Demo Reset)</h2>
+            <h2 className="font-bold text-base text-slate-900">Quản lý Dữ liệu Mẫu (Demo Data)</h2>
             <p className="text-xs text-slate-500">
-              Đặt lại dữ liệu chuẩn gồm Khối 6, 7, 8, 9, danh sách học sinh và các bài kiểm tra mẫu.
+              Khôi phục lại dữ liệu mẫu chuẩn hoặc dọn dẹp sạch toàn bộ các đề thi, lớp học và kết quả mẫu có sẵn.
             </p>
           </div>
         </div>
 
         <p className="text-xs text-slate-600">
-          Thao tác này rất thuận tiện khi Thầy/Cô muốn làm sạch dữ liệu thử nghiệm và tải lại toàn bộ ngân hàng câu hỏi gốc.
+          Thầy/Cô có thể bấm <strong>"Xóa hết dữ liệu mẫu"</strong> để bắt đầu soạn đề và tạo lớp mới hoàn toàn, hoặc bấm <strong>"Đặt lại dữ liệu mẫu ban đầu"</strong> nếu muốn nạp lại ngân hàng câu hỏi gốc bất cứ lúc nào.
         </p>
 
-        <button
-          onClick={onResetData}
-          className="inline-flex items-center space-x-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Đặt lại dữ liệu mẫu ban đầu</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button
+            onClick={onResetData}
+            className="inline-flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Đặt lại dữ liệu mẫu ban đầu</span>
+          </button>
+
+          {onClearDemoData && (
+            <button
+              onClick={onClearDemoData}
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Xóa hết dữ liệu mẫu</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
