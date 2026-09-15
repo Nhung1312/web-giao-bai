@@ -64,9 +64,14 @@ function AppContent() {
   }, []);
 
   const refreshAllData = async () => {
-    // 1. Instant local read
+    const deletedKeys = StorageService.getDeletedAssignmentKeys();
+
+    // 1. Instant local read (lọc bỏ các đề đã bị xóa)
     const localClasses = StorageService.getClasses();
-    const localAssignments = StorageService.getAssignments();
+    const localAssignments = StorageService.getAssignments().filter(a => {
+      const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
+      return !deletedKeys.has(a.id) && !deletedKeys.has(codeKey);
+    });
     const localSubmissions = StorageService.getSubmissions();
 
     setClasses(localClasses);
@@ -78,8 +83,26 @@ function AppContent() {
       const cloudExams = await FirestoreService.getExams();
       if (cloudExams && cloudExams.length > 0) {
         const map = new Map<string, Assignment>();
-        localAssignments.forEach(a => map.set(a.assignmentCode.toUpperCase(), a));
-        cloudExams.forEach(a => map.set(a.assignmentCode.toUpperCase(), a));
+        
+        // Thêm các đề local hợp lệ trước
+        localAssignments.forEach(a => {
+          const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
+          if (!deletedKeys.has(a.id) && !deletedKeys.has(codeKey)) {
+            map.set(codeKey, a);
+          }
+        });
+
+        // Thêm các đề Cloud Firestore chưa bị người dùng xóa
+        for (const a of cloudExams) {
+          const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
+          if (deletedKeys.has(a.id) || deletedKeys.has(codeKey)) {
+            // Đề này đã bị người dùng xóa trước đó -> Dọn dẹp ngầm trên Firestore luôn
+            FirestoreService.deleteExam(a.id, a.assignmentCode).catch(() => {});
+            continue;
+          }
+          map.set(codeKey, a);
+        }
+
         const merged = Array.from(map.values());
         setAssignments(merged);
       }
@@ -96,10 +119,10 @@ function AppContent() {
     }
   };
 
-  const handleClearDemoData = () => {
+  const handleClearDemoData = async () => {
     if (window.confirm('Bạn có chắc chắn muốn xóa hết toàn bộ dữ liệu mẫu (các đề thi, lớp học và kết quả nộp bài mẫu có sẵn)?\n\nLưu ý: Mọi bài tập hoặc lớp học do Thầy/Cô tự tạo thêm sẽ được giữ nguyên an toàn.')) {
-      const result = StorageService.clearDemoData();
-      refreshAllData();
+      const result = await StorageService.clearDemoDataAsync();
+      await refreshAllData();
       alert(`Đã xóa sạch dữ liệu mẫu thành công!\n• Đề mẫu đã xóa: ${result.deletedAssignments}\n• Lớp mẫu đã xóa: ${result.deletedClasses}\n• Lượt nộp mẫu đã xóa: ${result.deletedSubmissions}`);
     }
   };

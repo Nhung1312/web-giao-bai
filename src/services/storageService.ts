@@ -12,13 +12,15 @@ import {
   GRADE8_ASSIGNMENTS,
   GRADE9_ASSIGNMENTS
 } from '../data';
+import { FirestoreService } from './firestoreService';
 
 const STORAGE_KEYS = {
   CLASSES: 'toan_thcs_classes_v4',
   ASSIGNMENTS: 'toan_thcs_assignments_v4',
   SUBMISSIONS: 'toan_thcs_submissions_v4',
   TEACHER_PROFILE: 'toan_thcs_teacher_profile',
-  INITIALIZED: 'toan_thcs_initialized_v4'
+  INITIALIZED: 'toan_thcs_initialized_v4',
+  DELETED_ASSIGNMENT_KEYS: 'toan_thcs_deleted_assignment_keys_v4'
 };
 
 export const INITIAL_CLASSES: ClassRoom[] = [
@@ -162,6 +164,64 @@ export class StorageService {
    * Xóa toàn bộ dữ liệu mẫu (các đề kiểm tra, lớp học và kết quả nộp bài mẫu).
    * Các bài tập, đề kiểm tra hoặc lớp học do Thầy/Cô tự tạo sẽ được giữ lại an toàn.
    */
+  /**
+   * Lấy danh sách ID và Mã đề đã bị người dùng xóa vĩnh viễn
+   */
+  static getDeletedAssignmentKeys(): Set<string> {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.DELETED_ASSIGNMENT_KEYS);
+      if (!data) return new Set<string>();
+      const list = JSON.parse(data);
+      return new Set<string>(Array.isArray(list) ? list : []);
+    } catch {
+      return new Set<string>();
+    }
+  }
+
+  /**
+   * Đánh dấu ID hoặc Mã đề vào danh sách đã xóa để ngăn chặn sync kéo ngược lại từ Firestore
+   */
+  static markAssignmentAsDeleted(id?: string, code?: string): void {
+    try {
+      const set = this.getDeletedAssignmentKeys();
+      if (id) {
+        set.add(id);
+      }
+      if (code) {
+        const raw = code.trim().toUpperCase();
+        set.add(raw);
+        set.add(raw.replace(/\s+/g, ''));
+        set.add(raw.replace(/\s*-\s*/g, '-'));
+      }
+      localStorage.setItem(STORAGE_KEYS.DELETED_ASSIGNMENT_KEYS, JSON.stringify(Array.from(set)));
+    } catch (e) {
+      console.warn('Lỗi ghi DELETED_ASSIGNMENT_KEYS:', e);
+    }
+  }
+
+  /**
+   * Gỡ bỏ đánh dấu xóa khi người dùng cố ý tạo mới hoặc lưu đề thi với mã đó
+   */
+  static unmarkAssignmentAsDeleted(id?: string, code?: string): void {
+    try {
+      const set = this.getDeletedAssignmentKeys();
+      if (id) set.delete(id);
+      if (code) {
+        const raw = code.trim().toUpperCase();
+        set.delete(raw);
+        set.delete(raw.replace(/\s+/g, ''));
+        set.delete(raw.replace(/\s*-\s*/g, '-'));
+      }
+      localStorage.setItem(STORAGE_KEYS.DELETED_ASSIGNMENT_KEYS, JSON.stringify(Array.from(set)));
+    } catch (e) {
+      console.warn('Lỗi bỏ đánh dấu DELETED_ASSIGNMENT_KEYS:', e);
+    }
+  }
+
+  /**
+   * Xóa toàn bộ dữ liệu mẫu (các đề kiểm tra, lớp học và kết quả nộp bài mẫu).
+   * Các bài tập, đề kiểm tra hoặc lớp học do Thầy/Cô tự tạo sẽ được giữ lại an toàn.
+   */
   static clearDemoData(): { deletedAssignments: number; deletedClasses: number; deletedSubmissions: number } {
     this.initDemoData();
 
@@ -172,7 +232,13 @@ export class StorageService {
       a.id.startsWith('asg_toan6_') ||
       a.id.startsWith('asg_toan7_') ||
       a.id.startsWith('asg_toan8_') ||
-      a.id.startsWith('asg_toan9_');
+      a.id.startsWith('asg_toan9_') ||
+      (a.assignmentCode && (
+        a.assignmentCode.includes('EUJ9') ||
+        a.assignmentCode.includes('Y973') ||
+        a.assignmentCode.includes('K74Z') ||
+        a.assignmentCode.includes('FLMH')
+      ));
 
     // Tập hợp ID các lớp mẫu gốc
     const sampleClassIds = new Set(INITIAL_CLASSES.map(c => c.id));
@@ -184,6 +250,11 @@ export class StorageService {
     const currentAssignments = this.getAssignments();
     const currentClasses = this.getClasses();
     const currentSubmissions = this.getSubmissions();
+
+    // Đánh dấu các đề mẫu vào blacklist để không bị Firestore sync kéo lại
+    currentAssignments.filter(isSampleAssignment).forEach(a => {
+      this.markAssignmentAsDeleted(a.id, a.assignmentCode);
+    });
 
     // Lọc bỏ toàn bộ dữ liệu mẫu
     const remainingAssignments = currentAssignments.filter(a => !isSampleAssignment(a));
@@ -207,6 +278,40 @@ export class StorageService {
       deletedClasses,
       deletedSubmissions
     };
+  }
+
+  /**
+   * Xóa toàn bộ dữ liệu mẫu bất đồng bộ (xóa cả LocalStorage và dọn sạch trên Cloud Firestore)
+   */
+  static async clearDemoDataAsync(): Promise<{ deletedAssignments: number; deletedClasses: number; deletedSubmissions: number }> {
+    const currentAssignments = this.getAssignments();
+    const sampleAssignmentIds = new Set(INITIAL_ALL_ASSIGNMENTS.map(a => a.id));
+    const isSampleAssignment = (a: Assignment) =>
+      sampleAssignmentIds.has(a.id) ||
+      a.id.startsWith('asg_toan6_') ||
+      a.id.startsWith('asg_toan7_') ||
+      a.id.startsWith('asg_toan8_') ||
+      a.id.startsWith('asg_toan9_') ||
+      (a.assignmentCode && (
+        a.assignmentCode.includes('EUJ9') ||
+        a.assignmentCode.includes('Y973') ||
+        a.assignmentCode.includes('K74Z') ||
+        a.assignmentCode.includes('FLMH')
+      ));
+
+    const sampleAssignments = currentAssignments.filter(isSampleAssignment);
+    const result = this.clearDemoData();
+
+    // Xóa ngầm trên Cloud Firestore cho từng đề mẫu
+    for (const a of sampleAssignments) {
+      try {
+        await FirestoreService.deleteExam(a.id, a.assignmentCode);
+      } catch (err) {
+        console.warn('Lỗi khi xóa đề mẫu trên Firestore:', err);
+      }
+    }
+
+    return result;
   }
 
   // --- CLASSES ---
@@ -243,11 +348,17 @@ export class StorageService {
   // --- ASSIGNMENTS ---
   static getAssignments(): Assignment[] {
     this.initDemoData();
+    const deletedKeys = this.getDeletedAssignmentKeys();
     try {
       const data = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
-      return data !== null ? JSON.parse(data) : INITIAL_ASSIGNMENTS;
+      const rawList: Assignment[] = data !== null ? JSON.parse(data) : INITIAL_ASSIGNMENTS;
+      if (!Array.isArray(rawList)) return [];
+      return rawList.filter(a => {
+        const c = (a.assignmentCode || '').replace(/\s+/g, '').toUpperCase();
+        return !deletedKeys.has(a.id) && !deletedKeys.has(c);
+      });
     } catch {
-      return INITIAL_ASSIGNMENTS;
+      return [];
     }
   }
 
@@ -266,6 +377,7 @@ export class StorageService {
   }
 
   static saveAssignment(assignment: Assignment): void {
+    this.unmarkAssignmentAsDeleted(assignment.id, assignment.assignmentCode);
     const assignments = this.getAssignments();
     const index = assignments.findIndex(a => a.id === assignment.id);
     if (index >= 0) {
@@ -276,9 +388,41 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
   }
 
-  static deleteAssignment(assignmentId: string): void {
-    const assignments = this.getAssignments().filter(a => a.id !== assignmentId);
+  /**
+   * Xóa đề thi cục bộ và ghi vào danh sách đã xóa
+   */
+  static deleteAssignment(assignmentId: string, assignmentCode?: string): void {
+    this.markAssignmentAsDeleted(assignmentId, assignmentCode);
+    const deletedKeys = this.getDeletedAssignmentKeys();
+    const assignments = this.getAssignments().filter(a => {
+      const c = (a.assignmentCode || '').replace(/\s+/g, '').toUpperCase();
+      return a.id !== assignmentId && !deletedKeys.has(a.id) && !deletedKeys.has(c);
+    });
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
+  }
+
+  /**
+   * Xóa đề thi đồng bộ cả trên LocalStorage và Cloud Firestore vĩnh viễn
+   */
+  static async deleteAssignmentAsync(assignmentId: string, assignmentCode?: string): Promise<void> {
+    this.deleteAssignment(assignmentId, assignmentCode);
+    try {
+      await FirestoreService.deleteExam(assignmentId, assignmentCode);
+    } catch (e) {
+      console.warn('Lỗi khi xóa đề thi trên Firestore:', e);
+    }
+  }
+
+  /**
+   * Xóa tất cả các bài tập hiện có (cả Local và Cloud)
+   */
+  static async clearAllAssignmentsAsync(assignmentsToClear: Assignment[]): Promise<void> {
+    for (const a of assignmentsToClear) {
+      this.deleteAssignment(a.id, a.assignmentCode);
+      try {
+        await FirestoreService.deleteExam(a.id, a.assignmentCode);
+      } catch {}
+    }
   }
 
   // --- SUBMISSIONS ---

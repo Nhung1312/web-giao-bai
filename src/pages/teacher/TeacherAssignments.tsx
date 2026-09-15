@@ -68,10 +68,38 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
     });
   };
 
-  const handleDelete = (id: string, title: string) => {
-    if (window.confirm(`Bạn có chắc muốn xóa bài tập "${title}"?`)) {
-      StorageService.deleteAssignment(id);
-      onRefresh();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (asg: Assignment) => {
+    const titleText = asg.title || asg.assignmentCode;
+    if (window.confirm(`Bạn có chắc muốn xóa vĩnh viễn bài tập "${titleText}" (${asg.assignmentCode})?\n\nThao tác này sẽ xóa đề thi khỏi cả bộ nhớ máy và Cloud Firestore.`)) {
+      try {
+        setDeletingId(asg.id);
+        await StorageService.deleteAssignmentAsync(asg.id, asg.assignmentCode);
+        await onRefresh();
+      } catch (err) {
+        console.error('Lỗi khi xóa bài tập:', err);
+        await onRefresh();
+      } finally {
+        setDeletingId(null);
+      }
+    }
+  };
+
+  const handleDeleteAllFiltered = async () => {
+    if (filteredAssignments.length === 0) return;
+    const count = filteredAssignments.length;
+    if (window.confirm(`Bạn có chắc muốn xóa vĩnh viễn toàn bộ ${count} bài tập này?\n\nThao tác này sẽ dọn dẹp sạch cả trên máy tính và trên Cloud Firestore.`)) {
+      try {
+        setDeletingId('all');
+        await StorageService.clearAllAssignmentsAsync(filteredAssignments);
+        await onRefresh();
+      } catch (err) {
+        console.error('Lỗi khi xóa tất cả bài tập:', err);
+        await onRefresh();
+      } finally {
+        setDeletingId(null);
+      }
     }
   };
 
@@ -332,6 +360,17 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
             <span>
               Hiển thị <strong className="text-slate-800 dark:text-slate-100">{filteredAssignments.length}</strong> / {assignments.length} bài
             </span>
+            {filteredAssignments.length > 0 && (
+              <button
+                onClick={handleDeleteAllFiltered}
+                disabled={deletingId === 'all'}
+                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/80 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                title="Xóa toàn bộ các bài tập đang hiển thị trong danh sách này"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                <span>{deletingId === 'all' ? 'Đang xóa...' : `Xóa tất cả (${filteredAssignments.length})`}</span>
+              </button>
+            )}
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
@@ -410,11 +449,20 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(asg.id, asg.title)}
-                        className="text-slate-300 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-lg transition-colors cursor-pointer"
-                        title="Xóa bài tập"
+                        onClick={() => handleDelete(asg)}
+                        disabled={deletingId === asg.id}
+                        className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                          deletingId === asg.id
+                            ? 'text-rose-400 opacity-60'
+                            : 'text-slate-300 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400'
+                        }`}
+                        title="Xóa bài tập này vĩnh viễn"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {deletingId === asg.id ? (
+                          <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -468,7 +516,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
                   <button
                     onClick={() => onNavigate('create', { editingAssignment: asg })}
                     className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-200 font-bold rounded-xl transition-colors border border-amber-200 dark:border-amber-800 cursor-pointer shadow-2xs"
@@ -521,6 +569,20 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
                     <span>Kết quả</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(asg)}
+                    disabled={deletingId === asg.id}
+                    className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 font-bold rounded-xl transition-colors border border-rose-200 dark:border-rose-800 cursor-pointer shadow-2xs"
+                    title="Xóa vĩnh viễn bài tập này"
+                  >
+                    {deletingId === asg.id ? (
+                      <div className="w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                    )}
+                    <span>{deletingId === asg.id ? 'Đang xóa...' : 'Xóa bài'}</span>
                   </button>
                 </div>
               </div>

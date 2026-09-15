@@ -184,12 +184,44 @@ export class FirestoreService {
   }
 
   /**
-   * Xóa đề thi trên Firestore
+   * Xóa đề thi triệt để trên Firestore (hỗ trợ cả assignmentId và assignmentCode)
    */
-  static async deleteExam(assignmentId: string): Promise<void> {
+  static async deleteExam(assignmentId: string, assignmentCode?: string): Promise<void> {
     try {
-      await deleteDoc(doc(db, EXAMS_COLLECTION, assignmentId));
-      console.log(`[Firestore] Đã xóa đề thi ${assignmentId} trên Cloud Firestore.`);
+      if (assignmentId) {
+        try {
+          await deleteDoc(doc(db, EXAMS_COLLECTION, assignmentId));
+        } catch (err) {
+          console.warn(`[Firestore] Lỗi xóa doc theo id ${assignmentId}:`, err);
+        }
+      }
+
+      if (assignmentCode) {
+        const rawCode = assignmentCode.trim().toUpperCase();
+        const noSpaceCode = rawCode.replace(/\s+/g, '');
+        const withDashCode = rawCode.replace(/\s*-\s*/g, '-');
+
+        const codesToTry = Array.from(new Set([rawCode, noSpaceCode, withDashCode]));
+
+        for (const code of codesToTry) {
+          try {
+            await deleteDoc(doc(db, EXAMS_COLLECTION, code));
+          } catch {}
+
+          try {
+            const q = query(
+              collection(db, EXAMS_COLLECTION),
+              where('assignmentCode', '==', code)
+            );
+            const snap = await getDocs(q);
+            for (const d of snap.docs) {
+              await deleteDoc(d.ref);
+            }
+          } catch {}
+        }
+      }
+
+      console.log(`[Firestore] Đã xóa đề thi ${assignmentId} (${assignmentCode || ''}) trên Cloud Firestore.`);
     } catch (error) {
       console.error('[Firestore Error] Lỗi xóa đề thi trên Firestore:', error);
       throw error;
