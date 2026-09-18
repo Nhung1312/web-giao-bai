@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, User as UserIcon, GraduationCap, RotateCcw, Sparkles, Moon, Sun, LogOut, LogIn, Trash2, BookmarkCheck } from 'lucide-react';
+import { BookOpen, User as UserIcon, GraduationCap, RotateCcw, Sparkles, Moon, Sun, LogOut, LogIn, Trash2, BookmarkCheck, Trophy } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { GradeLevel } from '../types';
@@ -97,6 +97,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData, onClearDemoData }) 
                 </Link>
               );
             })}
+
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 my-auto mx-0.5" />
+
+            <Link
+              to="/contest/THI"
+              className={`inline-flex items-center space-x-1 px-3 py-1 rounded-lg text-xs font-black transition-all ${
+                location.pathname.startsWith('/contest')
+                  ? 'bg-orange-600 text-white shadow-xs'
+                  : 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/60'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-500" />
+              <span>Thi Online</span>
+            </Link>
           </div>
 
           {/* Actions & Role switchers */}
@@ -173,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData, onClearDemoData }) 
               <Link
                 to="/join"
                 className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  isStudent
+                  isStudent && !location.pathname.startsWith('/contest')
                     ? 'bg-white dark:bg-emerald-600 text-emerald-700 dark:text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}

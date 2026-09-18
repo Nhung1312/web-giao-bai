@@ -220,3 +220,62 @@ export interface MistakeRecord {
   aiHint?: string; // Gợi ý bước giải lưu trữ
 }
 
+// ==========================================
+// MỚI: HỆ THỐNG THI TRỰC TUYẾN (CONTESTS)
+// ==========================================
+export type ContestStatus = 'upcoming' | 'ongoing' | 'ended';
+
+export interface Contest {
+  id: string;
+  code: string; // Mã cuộc thi duy nhất, ví dụ: "DT7-001"
+  title: string;
+  description?: string;
+  grade: GradeLevel;
+  topic?: string;
+  questions: Question[];
+  durationMinutes: number; // Thời lượng làm bài (phút, ví dụ 15, 45, 60...)
+  startTime: string; // ISO date string thời gian bắt đầu
+  endTime: string; // ISO date string thời gian kết thúc
+  maxAttempts: number; // 1 = thi 1 lần duy nhất, 0 hoặc >1
+  allowViewScore: boolean; // Học sinh được xem điểm ngay sau khi nộp
+  allowViewAnswer: boolean; // Học sinh được xem đáp án chi tiết sau khi nộp
+  shuffleQuestions: boolean; // Trộn thứ tự câu hỏi
+  shuffleOptions: boolean; // Trộn thứ tự đáp án A, B, C, D
+  allowGoBack: boolean; // Cho phép quay lại câu trước
+  isPublished: boolean;
+  teacherId?: string;
+  teacherName?: string;
+  teacherEmail?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ContestSubmission {
+  id: string;
+  contestId: string;
+  contestCode: string;
+  contestTitle: string;
+  studentName: string;
+  studentClass: string;
+  studentId?: string;
+  answers: StudentAnswer[];
+  totalScore: number;
+  maxScore: number;
+  mcqScore: number;
+  essayScore: number;
+  hasEssay: boolean;
+  isEssayGraded: boolean;
+  correctCount: number;
+  wrongCount: number;
+  unansweredCount: number;
+  totalQuestions: number;
+  timeSpentSeconds: number;
+  startedAt: string;
+  submittedAt: string;
+  tabSwitchCount: number;
+  violationEvents: ViolationEvent[];
+  attemptNumber: number;
+  shuffledQuestionOrder?: string[];
+  isShuffled?: boolean;
+}
+

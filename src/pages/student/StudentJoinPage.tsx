@@ -100,6 +100,14 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
         if (found) {
           // Cache in local storage for faster subsequent access
           StorageService.saveAssignment(found);
+        } else {
+          // Kiểm tra xem có phải mã Cuộc thi trực tuyến (Contest) không
+          const contest = await FirestoreService.getContestByCode(cleanCode);
+          if (contest) {
+            setIsSearching(false);
+            window.location.href = `/contest/${cleanCode}`;
+            return;
+          }
         }
       } catch (err) {
         console.error('Lỗi khi tra cứu Firestore:', err);

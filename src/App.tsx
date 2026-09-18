@@ -17,6 +17,10 @@ import { StudentJoinPage } from './pages/student/StudentJoinPage';
 import { StudentExamPage } from './pages/student/StudentExamPage';
 import { StudentResultPage } from './pages/student/StudentResultPage';
 import { LoginPage } from './pages/LoginPage';
+import { ContestJoinPage } from './pages/student/contest/ContestJoinPage';
+import { ContestExamPage } from './pages/student/contest/ContestExamPage';
+import { ContestResultPage } from './pages/student/contest/ContestResultPage';
+import { ContestLeaderboardPage } from './pages/student/contest/ContestLeaderboardPage';
 import { useLearningProgressStore } from './store/useLearningProgressStore';
 
 function AppContent() {
@@ -178,7 +182,7 @@ function AppContent() {
   };
 
   // Check if we are inside an ongoing active exam (to hide progress bar during test for distraction-free)
-  const isTakingExam = location.pathname === '/exam';
+  const isTakingExam = location.pathname === '/exam' || location.pathname.endsWith('/exam');
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
@@ -261,6 +265,12 @@ function AppContent() {
               )
             }
           />
+
+          {/* Online Contest (Thi trực tuyến) Routes */}
+          <Route path="/contest/:code" element={<ContestJoinPage />} />
+          <Route path="/contest/:code/exam" element={<ContestExamPage />} />
+          <Route path="/contest/:code/result/:submissionId" element={<ContestResultPage />} />
+          <Route path="/contest/:code/ranking" element={<ContestLeaderboardPage />} />
 
           {/* Protected Teacher Portal */}
           <Route

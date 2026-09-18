@@ -446,6 +446,82 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(submissions));
   }
 
+  // ==========================================
+  // MỚI: QUẢN LÝ CUỘC THI TRỰC TUYẾN (CONTESTS)
+  // ==========================================
+  static getContests(): import('../types').Contest[] {
+    try {
+      const data = localStorage.getItem('toan_thcs_contests_v4');
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static getContestById(id: string): import('../types').Contest | null {
+    const list = this.getContests();
+    return list.find(c => c.id === id || c.code.toUpperCase() === id.toUpperCase()) || null;
+  }
+
+  static getContestByCode(code: string): import('../types').Contest | null {
+    if (!code) return null;
+    const clean = code.trim().toUpperCase();
+    const list = this.getContests();
+    return list.find(c => c.code.trim().toUpperCase() === clean || c.id === clean) || null;
+  }
+
+  static saveContest(contest: import('../types').Contest): void {
+    const list = this.getContests();
+    const idx = list.findIndex(c => c.id === contest.id || c.code.toUpperCase() === contest.code.toUpperCase());
+    if (idx >= 0) {
+      list[idx] = contest;
+    } else {
+      list.unshift(contest);
+    }
+    localStorage.setItem('toan_thcs_contests_v4', JSON.stringify(list));
+  }
+
+  static deleteContest(contestId: string): void {
+    const list = this.getContests().filter(c => c.id !== contestId && c.code !== contestId);
+    localStorage.setItem('toan_thcs_contests_v4', JSON.stringify(list));
+  }
+
+  static getContestSubmissions(contestId?: string): import('../types').ContestSubmission[] {
+    try {
+      const data = localStorage.getItem('toan_thcs_contest_submissions_v4');
+      const list: import('../types').ContestSubmission[] = data ? JSON.parse(data) : [];
+      if (contestId) {
+        return list.filter(s => s.contestId === contestId || s.contestCode.toUpperCase() === contestId.toUpperCase());
+      }
+      return list;
+    } catch {
+      return [];
+    }
+  }
+
+  static saveContestSubmission(submission: import('../types').ContestSubmission): void {
+    const list = this.getContestSubmissions();
+    const idx = list.findIndex(s => s.id === submission.id);
+    if (idx >= 0) {
+      list[idx] = submission;
+    } else {
+      list.unshift(submission);
+    }
+    localStorage.setItem('toan_thcs_contest_submissions_v4', JSON.stringify(list));
+  }
+
+  /**
+   * Sinh mã cuộc thi ngẫu nhiên duy nhất, ví dụ: THI7-8K4P
+   */
+  static generateContestCode(grade: string): string {
+    const randomChars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 4; i++) {
+      rand += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
+    }
+    return `THI${grade}-${rand}`;
+  }
+
   /**
    * Tạo mã bài tập ngẫu nhiên duy nhất, ví dụ: TOAN6A1-8K4P
    */

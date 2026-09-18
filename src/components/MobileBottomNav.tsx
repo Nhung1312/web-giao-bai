@@ -99,6 +99,31 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenProgress
               })}
             </div>
 
+            {/* Shortcut Thi trực tuyến in Mobile Sheet */}
+            <button
+              onClick={() => {
+                setShowGradeSheet(false);
+                navigate('/contest/THI');
+              }}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-orange-200 dark:border-orange-900/60 flex items-center justify-between cursor-pointer active:scale-98 transition-transform text-left"
+            >
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center font-bold shrink-0">
+                  <Trophy className="w-4 h-4 text-amber-100" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-900 dark:text-white flex items-center space-x-1.5">
+                    <span>Đấu trường Thi trực tuyến</span>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-orange-600 text-white">Mới</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Tranh tài theo thời gian thực, bảng vàng xếp hạng
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] text-orange-600 dark:text-orange-400 font-bold">Tham gia →</span>
+            </button>
+
             {/* Sổ tay câu sai Shortcut in Mobile Sheet */}
             <button
               onClick={() => {

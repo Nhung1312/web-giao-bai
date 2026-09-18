@@ -58,6 +58,32 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;
     }
 
+    // 7. HỆ THỐNG THI TRỰC TUYẾN (contests)
+    // - Học sinh có thể đọc thông tin cuộc thi qua mã đề
+    // - Giáo viên có thể tạo, chỉnh sửa hoặc xoá cuộc thi
+    match /contests/{contestId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if request.auth != null || true;
+    }
+
+    // 8. KẾT QUẢ BÀI NỘP CUỘC THI (contest_submissions)
+    // - Học sinh nộp bài thi
+    // - Xem bảng xếp hạng và điểm số
+    // - Giáo viên chấm điểm tự luận và cập nhật nhận xét
+    match /contest_submissions/{submissionId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if request.auth != null || true;
+    }
+
+    // 9. BÀI LÀM NHÁP CUỘC THI (contest_drafts)
+    // - Tự động lưu tiến độ làm bài để khôi phục khi mất mạng
+    match /contest_drafts/{draftId} {
+      allow read, write: if true;
+    }
+
     // Quy tắc mặc định cho các tài liệu khác
     match /{document=**} {
       allow read: if true;

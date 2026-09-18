@@ -7,6 +7,9 @@ import { TeacherCreateAssignment } from './TeacherCreateAssignment';
 import { TeacherResults } from './TeacherResults';
 import { TeacherSettings } from './TeacherSettings';
 import { ExamBankView } from './ExamBankView'; // MỚI: Import màn hình Kho Đề Mẫu
+import { TeacherContests } from './contest/TeacherContests'; // MỚI: Import Quản lý Thi trực tuyến
+import { TeacherCreateContest } from './contest/TeacherCreateContest'; // MỚI: Import Tạo cuộc thi
+import { TeacherContestResults } from './contest/TeacherContestResults'; // MỚI: Import Kết quả cuộc thi
 import { TeacherPaymentModal } from '../../components/TeacherPaymentModal';
 import { SubscriptionService } from '../../services/subscriptionService';
 import { useAuth } from '../../context/AuthContext';
@@ -22,7 +25,8 @@ import {
   Crown,
   Clock,
   AlertTriangle,
-  CreditCard
+  CreditCard,
+  Trophy
 } from 'lucide-react';
 
 interface TeacherLayoutProps {
@@ -80,6 +84,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
   const navItems = [
     { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
     { id: 'exam_bank', label: 'Kho đề mẫu', icon: Layers, highlight: true }, // MỚI: Thêm tab Kho đề mẫu lên menu ngang
+    { id: 'contests', label: 'Thi trực tuyến', icon: Trophy, contestHighlight: true }, // MỚI: Thêm tab Thi trực tuyến
     { id: 'classes', label: 'Lớp học', icon: Users, badge: classes.length },
     { id: 'assignments', label: 'Bài tập', icon: BookOpen, badge: assignments.length },
     { id: 'create', label: 'Tạo bài mới', icon: PlusCircle },
@@ -105,7 +110,11 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
                     onClick={() => handleNavigate(item.id)}
                     className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                       isActive
-                        ? 'bg-indigo-600 text-white shadow-sm'
+                        ? item.contestHighlight
+                          ? 'bg-orange-600 text-white shadow-sm'
+                          : 'bg-indigo-600 text-white shadow-sm'
+                        : item.contestHighlight
+                        ? 'bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800'
                         : item.highlight
                         ? 'bg-violet-50 dark:bg-violet-950/70 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800'
                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -212,6 +221,31 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         {activeTab === 'exam_bank' && (
           <ExamBankView
             classes={classes}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {/* MỚI: Định tuyến hiển thị Hệ thống Thi trực tuyến */}
+        {activeTab === 'contests' && (
+          <TeacherContests
+            classes={classes}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {activeTab === 'create_contest' && (
+          <TeacherCreateContest
+            editingContest={tabParams.editingContest}
+            onSaveSuccess={(savedContest) => {
+              setActiveTab('contests');
+            }}
+            onCancel={() => setActiveTab('contests')}
+          />
+        )}
+
+        {activeTab === 'contest_results' && (
+          <TeacherContestResults
+            contestId={tabParams.contestId}
             onNavigate={handleNavigate}
           />
         )}

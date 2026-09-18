@@ -17,7 +17,8 @@ import {
   Award,
   ChevronRight,
   Layers,
-  FileCheck
+  FileCheck,
+  Trophy
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -98,42 +99,65 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
             )}
           </div>
 
-          {/* 2 Big Action Portals side-by-side (Teacher & Student) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left pt-1">
+          {/* 3 Big Action Portals (Teacher, Online Contest, Student Practice) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left pt-1">
             {/* Teacher Card */}
             <Link
               to="/teacher"
-              className="group p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-indigo-50/40 dark:hover:bg-slate-800/80 border border-indigo-200/90 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5 active:scale-[0.99]"
+              className="group p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-indigo-50/40 dark:hover:bg-slate-800/80 border border-indigo-200/90 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3 active:scale-[0.99]"
             >
-              <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
                 <User className="w-5 h-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-between">
-                  <span>👨‍🏫 GIÁO VIÊN</span>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-between">
+                  <span>GIÁO VIÊN</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                  Tạo đề, xuất file PDF, quản lý lớp &amp; bảng điểm
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                  Tạo đề, xuất PDF, quản lý lớp &amp; điểm
                 </p>
               </div>
             </Link>
 
-            {/* Student Card */}
+            {/* Online Contest Card (MỚI & NỔI BẬT) */}
+            <Link
+              to="/contest/THI"
+              className="group p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/80 dark:from-orange-950/30 dark:to-slate-900 border-2 border-orange-400/80 dark:border-orange-500/50 hover:border-orange-500 shadow-sm hover:shadow-md transition-all flex items-center space-x-3 active:scale-[0.99] relative overflow-hidden"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                <Trophy className="w-5 h-5 text-amber-100" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-black text-orange-700 dark:text-orange-400 group-hover:text-orange-600 transition-colors">
+                    🏆 THI ONLINE
+                  </span>
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-orange-600 text-white animate-pulse">
+                    Mới
+                  </span>
+                </div>
+                <p className="text-[11px] text-orange-800/80 dark:text-orange-200/80 truncate mt-0.5">
+                  Đấu trường thi, bảng vàng xếp hạng
+                </p>
+              </div>
+            </Link>
+
+            {/* Student Practice Card */}
             <Link
               to="/join"
-              className="group p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-emerald-50/40 dark:hover:bg-slate-800/80 border border-emerald-200/90 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5 active:scale-[0.99]"
+              className="group p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-emerald-50/40 dark:hover:bg-slate-800/80 border border-emerald-200/90 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all flex items-center space-x-3 active:scale-[0.99]"
             >
-              <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
                 <GraduationCap className="w-5 h-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-black text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors flex items-center justify-between">
-                  <span>👨‍🎓 HỌC SINH</span>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors flex items-center justify-between">
+                  <span>HỌC SINH</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                  Vào phòng thi, tự luyện tập &amp; nhận lời giải
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                  Nhập mã bài tập &amp; kho tự luyện
                 </p>
               </div>
             </Link>

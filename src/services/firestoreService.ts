@@ -12,12 +12,15 @@ import {
   orderBy,
   serverTimestamp 
 } from '../firebase';
-import { Assignment, Submission, ClassRoom, ExamTemplate } from '../types';
+import { Assignment, Submission, ClassRoom, ExamTemplate, Contest, ContestSubmission } from '../types';
 
 export const EXAMS_COLLECTION = 'exams';
 export const RESULTS_COLLECTION = 'results';
 export const CLASSES_COLLECTION = 'classes';
 export const EXAM_TEMPLATES_COLLECTION = 'exam_templates'; // MỚI: Collection cho Kho Đề
+export const CONTESTS_COLLECTION = 'contests'; // MỚI: Collection cho Cuộc thi trực tuyến
+export const CONTEST_SUBMISSIONS_COLLECTION = 'contest_submissions'; // MỚI: Kết quả thi trực tuyến
+export const CONTEST_DRAFTS_COLLECTION = 'contest_drafts'; // MỚI: Lưu nháp thi trực tuyến
 
 export class FirestoreService {
   /**
@@ -301,6 +304,235 @@ export class FirestoreService {
     } catch (error) {
       console.error('[Firestore Error] Lỗi xóa đề mẫu khỏi Kho Đề:', error);
       throw error;
+    }
+  }
+
+  // ==========================================
+  // CÁC HÀM CHO HỆ THỐNG THI TRỰC TUYẾN (CONTESTS)
+  // ==========================================
+
+  /**
+   * Lưu hoặc cập nhật Cuộc thi trực tuyến
+   */
+  static async saveContest(
+    contest: Contest,
+    teacherUser?: { uid: string; email?: string | null; displayName?: string | null }
+  ): Promise<void> {
+    try {
+      const contestDocRef = doc(db, CONTESTS_COLLECTION, contest.id);
+      
+      const payload: any = {
+        ...contest,
+        code: contest.code.toUpperCase().trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (teacherUser) {
+        payload.teacherId = teacherUser.uid;
+        payload.teacherEmail = teacherUser.email || '';
+        payload.teacherName = teacherUser.displayName || 'Giáo viên';
+      }
+
+      await setDoc(contestDocRef, payload, { merge: true });
+      console.log(`[Firestore] Đã lưu cuộc thi ${contest.id} (${contest.code}) lên Cloud Firestore.`);
+    } catch (error) {
+      console.error('[Firestore Error] Không thể lưu cuộc thi lên Firestore:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Tìm kiếm cuộc thi theo Mã cuộc thi (code)
+   */
+  static async getContestByCode(code: string): Promise<Contest | null> {
+    if (!code) return null;
+    const cleanCode = code.trim().toUpperCase();
+
+    try {
+      const q = query(
+        collection(db, CONTESTS_COLLECTION),
+        where('code', '==', cleanCode)
+      );
+
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docData = querySnapshot.docs[0].data() as Contest;
+        return {
+          ...docData,
+          id: querySnapshot.docs[0].id
+        };
+      }
+
+      // Thử tìm theo Document ID
+      const docRef = doc(db, CONTESTS_COLLECTION, cleanCode);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return {
+          ...(docSnap.data() as Contest),
+          id: docSnap.id
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi tìm cuộc thi theo mã:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lấy chi tiết cuộc thi theo ID
+   */
+  static async getContestById(id: string): Promise<Contest | null> {
+    try {
+      const docRef = doc(db, CONTESTS_COLLECTION, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return {
+          ...(docSnap.data() as Contest),
+          id: docSnap.id
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi lấy cuộc thi theo ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lấy danh sách tất cả cuộc thi (hỗ trợ lọc theo giáo viên)
+   */
+  static async getContests(teacherId?: string): Promise<Contest[]> {
+    try {
+      let q;
+      if (teacherId) {
+        q = query(
+          collection(db, CONTESTS_COLLECTION),
+          where('teacherId', '==', teacherId)
+        );
+      } else {
+        q = query(collection(db, CONTESTS_COLLECTION));
+      }
+
+      const querySnapshot = await getDocs(q);
+      const contests: Contest[] = [];
+      querySnapshot.forEach((docSnap) => {
+        contests.push({
+          ...(docSnap.data() as Contest),
+          id: docSnap.id
+        });
+      });
+      return contests;
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi tải danh sách cuộc thi:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Xóa cuộc thi
+   */
+  static async deleteContest(contestId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, CONTESTS_COLLECTION, contestId));
+      console.log(`[Firestore] Đã xóa cuộc thi ${contestId}.`);
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi xóa cuộc thi:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lưu bài làm của thí sinh vào collection contest_submissions
+   */
+  static async saveContestSubmission(submission: ContestSubmission): Promise<void> {
+    try {
+      const submissionDocRef = doc(db, CONTEST_SUBMISSIONS_COLLECTION, submission.id);
+      await setDoc(submissionDocRef, {
+        ...submission,
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+      console.log(`[Firestore] Đã lưu bài nộp cuộc thi của học sinh ${submission.studentName} (${submission.totalScore}đ).`);
+    } catch (error) {
+      console.error('[Firestore Error] Không thể lưu bài nộp cuộc thi:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lấy tất cả bài thi của một cuộc thi (dùng cho Bảng xếp hạng và Chấm điểm)
+   */
+  static async getContestSubmissions(contestId: string): Promise<ContestSubmission[]> {
+    try {
+      const q = query(
+        collection(db, CONTEST_SUBMISSIONS_COLLECTION),
+        where('contestId', '==', contestId)
+      );
+      const querySnapshot = await getDocs(q);
+      const submissions: ContestSubmission[] = [];
+      querySnapshot.forEach((docSnap) => {
+        submissions.push({
+          ...(docSnap.data() as ContestSubmission),
+          id: docSnap.id
+        });
+      });
+      return submissions;
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi tải danh sách bài nộp cuộc thi:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Cập nhật điểm và nhận xét tự luận của bài nộp
+   */
+  static async updateContestSubmission(submissionId: string, updates: Partial<ContestSubmission>): Promise<void> {
+    try {
+      const docRef = doc(db, CONTEST_SUBMISSIONS_COLLECTION, submissionId);
+      await setDoc(docRef, {
+        ...updates,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi cập nhật bài nộp cuộc thi:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lưu nháp bài thi trực tuyến lên Firestore để đồng bộ giữa các thiết bị hoặc tránh mất dữ liệu khi mất mạng
+   */
+  static async saveContestDraft(contestId: string, studentName: string, draftData: any): Promise<void> {
+    try {
+      const draftKey = `${contestId}_${encodeURIComponent(studentName.trim())}`;
+      const docRef = doc(db, CONTEST_DRAFTS_COLLECTION, draftKey);
+      await setDoc(docRef, {
+        contestId,
+        studentName,
+        ...draftData,
+        lastSavedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      console.warn('[Firestore] Lỗi lưu nháp cuộc thi (non-fatal):', error);
+    }
+  }
+
+  /**
+   * Lấy nháp bài thi trực tuyến nếu có
+   */
+  static async getContestDraft(contestId: string, studentName: string): Promise<any | null> {
+    try {
+      const draftKey = `${contestId}_${encodeURIComponent(studentName.trim())}`;
+      const docRef = doc(db, CONTEST_DRAFTS_COLLECTION, draftKey);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return snap.data();
+      }
+      return null;
+    } catch (error) {
+      console.warn('[Firestore] Lỗi đọc nháp cuộc thi:', error);
+      return null;
     }
   }
 }

@@ -4,10 +4,157 @@
  * Hỗ trợ cả câu trắc nghiệm, trả lời ngắn và câu tự luận có đính kèm ảnh bài làm học sinh.
  */
 
-import { Assignment, Submission, StudentAnswer, AssignmentStats, QuestionAnalysis, ViolationEvent } from '../types';
+import { Assignment, Submission, StudentAnswer, AssignmentStats, QuestionAnalysis, ViolationEvent, Contest, ContestSubmission } from '../types';
 import { isEssayQuestion } from '../utils/questionUtils';
 
 export class GradingService {
+  /**
+   * Tự động chấm bài nộp Cuộc thi (Contest)
+   */
+  static gradeContestSubmission(params: {
+    contest: Contest;
+    studentAnswers: Record<string, string>;
+    studentSolutions?: Record<string, string>;
+    essayImagesByQuestion?: Record<string, string[]>;
+    studentName: string;
+    studentClass: string;
+    studentId?: string;
+    startedAt: string;
+    submittedAt: string;
+    tabSwitchCount?: number;
+    violationEvents?: ViolationEvent[];
+    isShuffled?: boolean;
+    attemptNumber?: number;
+    aiFeedbacks?: Record<string, { score?: number; feedback?: string; graded?: boolean }>;
+  }): ContestSubmission {
+    const {
+      contest,
+      studentAnswers,
+      studentSolutions = {},
+      essayImagesByQuestion = {},
+      studentName,
+      studentClass,
+      studentId,
+      startedAt,
+      submittedAt,
+      tabSwitchCount = 0,
+      violationEvents = [],
+      isShuffled = false,
+      attemptNumber = 1,
+      aiFeedbacks = {}
+    } = params;
+
+    let earnedMcqPoints = 0;
+    let earnedEssayPoints = 0;
+    let earnedTotalPoints = 0;
+    let maxPointsTotal = 0;
+    let correctCount = 0;
+    let wrongCount = 0;
+    let unansweredCount = 0;
+    let hasEssay = false;
+    let isEssayGraded = true;
+
+    const answers: StudentAnswer[] = contest.questions.map((q) => {
+      const selected = (studentAnswers[q.id] || '').trim();
+      const solutionText = (studentSolutions[q.id] || '').trim();
+      const images = essayImagesByQuestion[q.id] || [];
+      const aiEval = aiFeedbacks[q.id];
+      const isEssay = isEssayQuestion(q);
+      const questionPoints = q.points || 1.0;
+
+      let isCorrect = false;
+      let pointsEarned = 0;
+      let isUnanswered = false;
+
+      if (isEssay) {
+        hasEssay = true;
+        if (aiEval && typeof aiEval.score === 'number') {
+          pointsEarned = Math.min(questionPoints, Math.max(0, aiEval.score));
+          isCorrect = pointsEarned >= (questionPoints * 0.5);
+          earnedEssayPoints += pointsEarned;
+        } else {
+          isEssayGraded = false;
+          pointsEarned = 0;
+          isCorrect = false;
+        }
+      } else if (q.type === 'short_answer') {
+        isUnanswered = selected === '';
+        // So sánh chuỗi không dấu / khoảng trắng
+        const cleanSelected = selected.replace(/\s+/g, '').toLowerCase();
+        const cleanCorrect = (q.correctAnswer || '').replace(/\s+/g, '').toLowerCase();
+        isCorrect = !isUnanswered && cleanSelected === cleanCorrect;
+        pointsEarned = isCorrect ? questionPoints : 0;
+        earnedMcqPoints += pointsEarned;
+      } else {
+        // Multiple choice & True / False
+        isUnanswered = selected === '';
+        isCorrect = !isUnanswered && selected.toUpperCase() === (q.correctAnswer || '').toUpperCase();
+        pointsEarned = isCorrect ? questionPoints : 0;
+        earnedMcqPoints += pointsEarned;
+      }
+
+      earnedTotalPoints += pointsEarned;
+      maxPointsTotal += questionPoints;
+
+      if (isUnanswered) {
+        unansweredCount++;
+      } else if (isCorrect) {
+        correctCount++;
+      } else {
+        wrongCount++;
+      }
+
+      return {
+        questionId: q.id,
+        selectedAnswer: selected,
+        studentSolutionText: solutionText,
+        essayImages: images,
+        isCorrect,
+        pointsEarned,
+        maxPoints: questionPoints,
+        aiFeedback: aiEval?.feedback,
+        aiScore: aiEval?.score,
+        aiGraded: aiEval?.graded
+      };
+    });
+
+    // Thang điểm 10 chuẩn
+    const rawScore = maxPointsTotal > 0 ? (earnedTotalPoints / maxPointsTotal) * 10 : 0;
+    const finalScore = Math.round(rawScore * 10) / 10;
+
+    const startTimeMs = new Date(startedAt).getTime();
+    const endTimeMs = new Date(submittedAt).getTime();
+    const timeSpentSeconds = Math.max(1, Math.round((endTimeMs - startTimeMs) / 1000));
+
+    return {
+      id: `csub_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      contestId: contest.id,
+      contestCode: contest.code,
+      contestTitle: contest.title,
+      studentName,
+      studentClass,
+      studentId: studentId || `student_${Date.now()}`,
+      answers,
+      totalScore: finalScore,
+      maxScore: 10,
+      mcqScore: Math.round(earnedMcqPoints * 10) / 10,
+      essayScore: Math.round(earnedEssayPoints * 10) / 10,
+      correctCount,
+      wrongCount,
+      unansweredCount,
+      totalQuestions: contest.questions.length,
+      startedAt,
+      submittedAt,
+      timeSpentSeconds,
+      tabSwitchCount,
+      violationEvents,
+      attemptNumber,
+      isShuffled,
+      hasEssay,
+      isEssayGraded
+    };
+  }
+
   /**
    * Tự động chấm bài làm của học sinh
    */

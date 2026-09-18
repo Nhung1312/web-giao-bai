@@ -1,0 +1,182 @@
+import { Contest, ContestStatus, ContestSubmission, Question, QuestionOption } from '../types';
+import { isEssayQuestion } from './questionUtils';
+
+/**
+ * Xác định trạng thái của Cuộc thi: 'upcoming' | 'ongoing' | 'ended'
+ */
+export function getContestStatus(contest: Contest): ContestStatus {
+  const now = new Date().getTime();
+  const startTime = new Date(contest.startTime).getTime();
+  const endTime = new Date(contest.endTime).getTime();
+
+  if (now < startTime) {
+    return 'upcoming';
+  }
+  if (now > endTime) {
+    return 'ended';
+  }
+  return 'ongoing';
+}
+
+/**
+ * Lấy nhãn và màu sắc hiển thị trạng thái cuộc thi
+ */
+export function getContestStatusMeta(status: ContestStatus): {
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+} {
+  switch (status) {
+    case 'ongoing':
+      return {
+        label: 'Đang diễn ra',
+        badgeClass: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+        dotClass: 'bg-emerald-500 animate-pulse'
+      };
+    case 'upcoming':
+      return {
+        label: 'Sắp diễn ra',
+        badgeClass: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800',
+        dotClass: 'bg-amber-500'
+      };
+    case 'ended':
+      return {
+        label: 'Đã kết thúc',
+        badgeClass: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+        dotClass: 'bg-slate-400'
+      };
+  }
+}
+
+/**
+ * Định dạng ngày giờ thân thiện theo chuẩn Việt Nam (vd: 14:30 20/03/2026)
+ */
+export function formatContestDateTime(isoString: string): string {
+  if (!isoString) return '--:--';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const hours = d.getHours().toString().padStart(2, '0');
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const year = d.getFullYear();
+    return `${hours}:${minutes} ${day}/${month}/${year}`;
+  } catch {
+    return isoString;
+  }
+}
+
+/**
+ * Tính toán thời gian đếm ngược thân thiện
+ */
+export function getRelativeTimeRemaining(targetIso: string): string {
+  const target = new Date(targetIso).getTime();
+  const diff = target - Date.now();
+  if (diff <= 0) return 'Đã hết giờ';
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+  if (days > 0) return `${days} ngày ${hours} giờ nữa`;
+  if (hours > 0) return `${hours} giờ ${minutes} phút nữa`;
+  if (minutes > 0) return `${minutes} phút ${seconds} giây nữa`;
+  return `${seconds} giây nữa`;
+}
+
+/**
+ * Xếp hạng thí sinh theo quy tắc:
+ * 1. Tổng điểm cao hơn đứng trước
+ * 2. Nếu bằng điểm: thời gian làm bài ít hơn (nhanh hơn) đứng trước
+ * 3. Nếu vẫn bằng: nộp bài sớm hơn đứng trước
+ */
+export function rankContestSubmissions(submissions: ContestSubmission[]): ContestSubmission[] {
+  return [...submissions].sort((a, b) => {
+    // 1. Điểm tổng
+    if (b.totalScore !== a.totalScore) {
+      return b.totalScore - a.totalScore;
+    }
+    // 2. Thời gian làm bài (giây)
+    if (a.timeSpentSeconds !== b.timeSpentSeconds) {
+      return a.timeSpentSeconds - b.timeSpentSeconds;
+    }
+    // 3. Thời điểm nộp
+    return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
+  });
+}
+
+/**
+ * Trộn ngẫu nhiên thứ tự câu hỏi và đáp án cho cuộc thi
+ * Giữ nguyên ánh xạ đáp án đúng (correctAnswer)
+ */
+export function shuffleContestQuestions(
+  questions: Question[],
+  shuffleQ: boolean,
+  shuffleOpts: boolean
+): Question[] {
+  if (!questions || questions.length === 0) return [];
+
+  // 1. Tạo bản sao
+  let list: Question[] = questions.map(q => ({
+    ...q,
+    options: q.options ? q.options.map(opt => ({ ...opt })) : []
+  }));
+
+  // 2. Trộn thứ tự câu hỏi
+  if (shuffleQ) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+  }
+
+  // 3. Trộn đáp án nếu là trắc nghiệm
+  const standardLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
+  list = list.map((q, idx) => {
+    const isEssay = isEssayQuestion(q);
+    if (!shuffleOpts || isEssay || !q.options || q.options.length <= 1) {
+      return {
+        ...q,
+        order: idx + 1
+      };
+    }
+
+    // Tìm text của đáp án đúng hiện tại
+    const currentCorrect = q.options.find(
+      opt => opt.id.trim().toUpperCase() === (q.correctAnswer || '').trim().toUpperCase()
+    );
+    const correctText = currentCorrect ? currentCorrect.text.trim() : '';
+
+    const optsCopy = [...q.options];
+    for (let i = optsCopy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [optsCopy[i], optsCopy[j]] = [optsCopy[j], optsCopy[i]];
+    }
+
+    let newCorrect = q.correctAnswer;
+    const newOptions: QuestionOption[] = optsCopy.map((opt, optIdx) => {
+      const label = standardLabels[optIdx] || String.fromCharCode(65 + optIdx);
+      if (
+        (correctText && opt.text.trim() === correctText) ||
+        (!correctText && opt.id.trim().toUpperCase() === (q.correctAnswer || '').trim().toUpperCase())
+      ) {
+        newCorrect = label;
+      }
+      return {
+        id: label,
+        text: opt.text
+      };
+    });
+
+    return {
+      ...q,
+      order: idx + 1,
+      options: newOptions,
+      correctAnswer: newCorrect
+    };
+  });
+
+  return list;
+}

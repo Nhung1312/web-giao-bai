@@ -52,8 +52,11 @@ export function isEssayQuestion(q: Question | any): boolean {
   if (!q) return false;
 
   // 1. Kiểm tra thuộc tính type / category được chỉ định trực tiếp
-  if (q.type === 'essay' || q.type === 'short_answer' || q.category === 'tu_luan') {
+  if (q.type === 'essay' || q.category === 'tu_luan') {
     return true;
+  }
+  if (q.type === 'short_answer' || q.type === 'multiple_choice' || q.type === 'true_false') {
+    return false;
   }
 
   const rawQuestionText = (q.question || q.questionText || q.content || '').toLowerCase();
