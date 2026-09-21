@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ClassRoom, Student, GradeLevel, Assignment } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Users, 
   Plus, 
@@ -28,10 +30,20 @@ interface TeacherClassesProps {
 }
 
 export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignments = [], onRefresh, onNavigate }) => {
+  const { user } = useAuth();
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [showImportExcelModal, setShowImportExcelModal] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+
+  // Đồng bộ danh sách lớp lên Cloud Firestore của tài khoản Giáo viên
+  const syncToCloud = (updatedClasses: ClassRoom[]) => {
+    if (user?.uid) {
+      FirestoreService.saveTeacherClasses(user.uid, updatedClasses).catch(err => {
+        console.warn('Lỗi đồng bộ lớp học lên Firestore:', err);
+      });
+    }
+  };
   
   // Class Form
   const [newClassName, setNewClassName] = useState('');
@@ -74,6 +86,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
     };
 
     StorageService.saveClass(newClass);
+    syncToCloud(StorageService.getClasses());
     onRefresh();
     setSelectedClassId(newClass.id);
     setNewClassName('');
@@ -83,6 +96,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
   const handleDeleteClass = (classId: string, className: string) => {
     if (window.confirm(`Bạn có chắc muốn xóa lớp ${className}? Tất cả danh sách học sinh thuộc lớp này sẽ bị xóa.`)) {
       StorageService.deleteClass(classId);
+      syncToCloud(StorageService.getClasses());
       onRefresh();
       if (selectedClassId === classId) {
         const remaining = classes.filter(c => c.id !== classId);
@@ -109,6 +123,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
     };
 
     StorageService.saveClass(updatedClass);
+    syncToCloud(StorageService.getClasses());
     onRefresh();
     setStudentName('');
     setStudentCode('');
@@ -123,6 +138,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
       students: updatedStudents
     };
     StorageService.saveClass(updatedClass);
+    syncToCloud(StorageService.getClasses());
     onRefresh();
   };
 
@@ -174,6 +190,7 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
         students: [...(currentClass.students || []), ...newStudents]
       };
       StorageService.saveClass(updatedClass);
+      syncToCloud(StorageService.getClasses());
       onRefresh();
       setExcelPasteText('');
       setShowImportExcelModal(false);

@@ -20,7 +20,8 @@ const STORAGE_KEYS = {
   SUBMISSIONS: 'toan_thcs_submissions_v4',
   TEACHER_PROFILE: 'toan_thcs_teacher_profile',
   INITIALIZED: 'toan_thcs_initialized_v4',
-  DELETED_ASSIGNMENT_KEYS: 'toan_thcs_deleted_assignment_keys_v4'
+  DELETED_ASSIGNMENT_KEYS: 'toan_thcs_deleted_assignment_keys_v4',
+  HAS_CLEARED_DEMO: 'toan_thcs_has_cleared_demo_v4'
 };
 
 export const INITIAL_CLASSES: ClassRoom[] = [
@@ -138,9 +139,41 @@ export const INITIAL_SUBMISSIONS: Submission[] = [
 
 export class StorageService {
   /**
-   * Khởi tạo dữ liệu mẫu nếu chưa có
+   * Kiểm tra xem người dùng đã xóa dữ liệu mẫu hay chưa
+   */
+  static hasClearedDemoData(): boolean {
+    return localStorage.getItem(STORAGE_KEYS.HAS_CLEARED_DEMO) === 'true';
+  }
+
+  /**
+   * Đặt trạng thái đã xóa dữ liệu mẫu
+   */
+  static setClearedDemoData(val: boolean): void {
+    if (val) {
+      localStorage.setItem(STORAGE_KEYS.HAS_CLEARED_DEMO, 'true');
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.HAS_CLEARED_DEMO);
+    }
+  }
+
+  /**
+   * Khởi tạo dữ liệu mẫu nếu chưa có và người dùng chưa từng yêu cầu xóa dữ liệu mẫu
    */
   static initDemoData(): void {
+    if (this.hasClearedDemoData()) {
+      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+      if (localStorage.getItem(STORAGE_KEYS.CLASSES) === null) {
+        localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify([]));
+      }
+      if (localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS) === null) {
+        localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify([]));
+      }
+      if (localStorage.getItem(STORAGE_KEYS.SUBMISSIONS) === null) {
+        localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify([]));
+      }
+      return;
+    }
+
     const initialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
     if (!initialized) {
       localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(INITIAL_CLASSES));
@@ -154,10 +187,12 @@ export class StorageService {
    * Reset toàn bộ dữ liệu về mẫu ban đầu
    */
   static resetAllData(): void {
+    this.setClearedDemoData(false);
     localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(INITIAL_CLASSES));
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(INITIAL_SUBMISSIONS));
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+    localStorage.removeItem(STORAGE_KEYS.DELETED_ASSIGNMENT_KEYS);
   }
 
   /**
@@ -223,6 +258,7 @@ export class StorageService {
    * Các bài tập, đề kiểm tra hoặc lớp học do Thầy/Cô tự tạo sẽ được giữ lại an toàn.
    */
   static clearDemoData(): { deletedAssignments: number; deletedClasses: number; deletedSubmissions: number } {
+    this.setClearedDemoData(true);
     this.initDemoData();
 
     // Tập hợp ID các đề mẫu gốc
@@ -237,7 +273,15 @@ export class StorageService {
         a.assignmentCode.includes('EUJ9') ||
         a.assignmentCode.includes('Y973') ||
         a.assignmentCode.includes('K74Z') ||
-        a.assignmentCode.includes('FLMH')
+        a.assignmentCode.includes('FLMH') ||
+        a.assignmentCode === 'TOAN6A1-8K4P' ||
+        a.assignmentCode === 'TOAN6-HINH1' ||
+        a.assignmentCode === 'TOAN7-DECUONG' ||
+        a.assignmentCode === 'TOAN7-TAMGIAC' ||
+        a.assignmentCode === 'TOAN8-HANGDANGTHUC' ||
+        a.assignmentCode === 'TOAN8-TUGIAC' ||
+        a.assignmentCode === 'TOAN9-CANTHUC' ||
+        a.assignmentCode === 'TOAN9-DUONGTRON'
       ));
 
     // Tập hợp ID các lớp mẫu gốc
@@ -283,7 +327,7 @@ export class StorageService {
   /**
    * Xóa toàn bộ dữ liệu mẫu bất đồng bộ (xóa cả LocalStorage và dọn sạch trên Cloud Firestore)
    */
-  static async clearDemoDataAsync(): Promise<{ deletedAssignments: number; deletedClasses: number; deletedSubmissions: number }> {
+  static async clearDemoDataAsync(teacherUid?: string): Promise<{ deletedAssignments: number; deletedClasses: number; deletedSubmissions: number }> {
     const currentAssignments = this.getAssignments();
     const sampleAssignmentIds = new Set(INITIAL_ALL_ASSIGNMENTS.map(a => a.id));
     const isSampleAssignment = (a: Assignment) =>
@@ -296,13 +340,35 @@ export class StorageService {
         a.assignmentCode.includes('EUJ9') ||
         a.assignmentCode.includes('Y973') ||
         a.assignmentCode.includes('K74Z') ||
-        a.assignmentCode.includes('FLMH')
+        a.assignmentCode.includes('FLMH') ||
+        a.assignmentCode === 'TOAN6A1-8K4P' ||
+        a.assignmentCode === 'TOAN6-HINH1' ||
+        a.assignmentCode === 'TOAN7-DECUONG' ||
+        a.assignmentCode === 'TOAN7-TAMGIAC' ||
+        a.assignmentCode === 'TOAN8-HANGDANGTHUC' ||
+        a.assignmentCode === 'TOAN8-TUGIAC' ||
+        a.assignmentCode === 'TOAN9-CANTHUC' ||
+        a.assignmentCode === 'TOAN9-DUONGTRON'
       ));
 
     const sampleAssignments = currentAssignments.filter(isSampleAssignment);
     const result = this.clearDemoData();
 
-    // Xóa ngầm trên Cloud Firestore cho từng đề mẫu
+    // 1. Đồng bộ trạng thái đã xóa dữ liệu mẫu lên tài khoản Cloud của Giáo viên
+    if (teacherUid) {
+      try {
+        const deletedKeys = Array.from(this.getDeletedAssignmentKeys());
+        await FirestoreService.saveTeacherProfile(teacherUid, {
+          hasClearedDemoData: true,
+          deletedAssignmentKeys: deletedKeys,
+          classes: this.getClasses()
+        });
+      } catch (err) {
+        console.warn('Lỗi khi lưu cờ xóa demo lên Cloud:', err);
+      }
+    }
+
+    // 2. Xóa ngầm trên Cloud Firestore cho từng đề mẫu
     for (const a of sampleAssignments) {
       try {
         await FirestoreService.deleteExam(a.id, a.assignmentCode);
@@ -317,11 +383,21 @@ export class StorageService {
   // --- CLASSES ---
   static getClasses(): ClassRoom[] {
     this.initDemoData();
+    const isCleared = this.hasClearedDemoData();
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CLASSES);
-      return data !== null ? JSON.parse(data) : INITIAL_CLASSES;
+      if (data !== null) {
+        const list = JSON.parse(data);
+        if (Array.isArray(list)) {
+          if (isCleared) {
+            return list.filter(c => !['class_6a1', 'class_7a2', 'class_8a1', 'class_9a3'].includes(c.id));
+          }
+          return list;
+        }
+      }
+      return isCleared ? [] : INITIAL_CLASSES;
     } catch {
-      return INITIAL_CLASSES;
+      return isCleared ? [] : INITIAL_CLASSES;
     }
   }
 
@@ -349,16 +425,29 @@ export class StorageService {
   static getAssignments(): Assignment[] {
     this.initDemoData();
     const deletedKeys = this.getDeletedAssignmentKeys();
+    const isCleared = this.hasClearedDemoData();
+
+    const isSampleAssignment = (a: Assignment) => {
+      if (!a) return false;
+      if (a.id.startsWith('asg_toan6_') || a.id.startsWith('asg_toan7_') || a.id.startsWith('asg_toan8_') || a.id.startsWith('asg_toan9_')) return true;
+      const c = (a.assignmentCode || '').replace(/\s+/g, '').toUpperCase();
+      if (['TOAN6A1-8K4P', 'TOAN6-HINH1', 'TOAN7-DECUONG', 'TOAN7-TAMGIAC', 'TOAN8-HANGDANGTHUC', 'TOAN8-TUGIAC', 'TOAN9-CANTHUC', 'TOAN9-DUONGTRON'].includes(c)) return true;
+      if (c.includes('EUJ9') || c.includes('Y973') || c.includes('K74Z') || c.includes('FLMH')) return true;
+      return false;
+    };
+
     try {
       const data = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
-      const rawList: Assignment[] = data !== null ? JSON.parse(data) : INITIAL_ASSIGNMENTS;
+      const rawList: Assignment[] = data !== null ? JSON.parse(data) : (isCleared ? [] : INITIAL_ASSIGNMENTS);
       if (!Array.isArray(rawList)) return [];
       return rawList.filter(a => {
         const c = (a.assignmentCode || '').replace(/\s+/g, '').toUpperCase();
-        return !deletedKeys.has(a.id) && !deletedKeys.has(c);
+        if (deletedKeys.has(a.id) || deletedKeys.has(c)) return false;
+        if (isCleared && isSampleAssignment(a)) return false;
+        return true;
       });
     } catch {
-      return [];
+      return isCleared ? [] : INITIAL_ASSIGNMENTS;
     }
   }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams } from 'react-router-dom';
 import { StorageService } from '../../services/storageService';
 import { FirestoreService } from '../../services/firestoreService';
 import { Assignment, ClassRoom } from '../../types';
@@ -20,7 +20,8 @@ import {
   ChevronRight,
   Zap,
   GraduationCap,
-  Loader2
+  Loader2,
+  UserCheck
 } from 'lucide-react';
 
 interface StudentJoinPageProps {
@@ -30,12 +31,25 @@ interface StudentJoinPageProps {
 
 export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = '', onStartExam }) => {
   const [searchParams] = useSearchParams();
-  const queryCode = searchParams.get('code') || initialCode;
+  const { code: paramCode } = useParams<{ code?: string }>();
+  const queryCode = searchParams.get('code') || paramCode || initialCode;
   
   const [code, setCode] = useState(queryCode);
-  const [studentName, setStudentName] = useState('');
+  const [studentName, setStudentName] = useState(() => {
+    try {
+      return localStorage.getItem('toan_thcs_student_name') || '';
+    } catch {
+      return '';
+    }
+  });
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [customClassName, setCustomClassName] = useState('');
+  const [customClassName, setCustomClassName] = useState(() => {
+    try {
+      return localStorage.getItem('toan_thcs_student_class') || '';
+    } catch {
+      return '';
+    }
+  });
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -53,6 +67,8 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
     setClasses(loadedClasses);
     if (loadedClasses.length > 0 && !selectedClassId) {
       setSelectedClassId(loadedClasses[0].id);
+    } else if (loadedClasses.length === 0) {
+      setSelectedClassId('other');
     }
     
     // Load both local and firestore assignments for catalog
@@ -120,6 +136,13 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
       setAssignment(found);
       if (found.classId && found.classId !== 'all') {
         setSelectedClassId(found.classId);
+      } else {
+        setSelectedClassId('other');
+        if (found.className && !customClassName) {
+          setCustomClassName(found.className);
+        } else if (found.grade && !customClassName) {
+          setCustomClassName(`Lớp ${found.grade}`);
+        }
       }
     } else {
       setAssignment(null);
@@ -132,6 +155,11 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
     setAssignment(selectedAsg);
     if (selectedAsg.classId && selectedAsg.classId !== 'all') {
       setSelectedClassId(selectedAsg.classId);
+    } else {
+      setSelectedClassId('other');
+      if (selectedAsg.className && !customClassName) {
+        setCustomClassName(selectedAsg.className);
+      }
     }
     setActiveTab('enter_code');
     setErrorMsg('');
@@ -143,7 +171,8 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
       setErrorMsg('Vui lòng nhập mã bài tập hợp lệ hoặc chọn một đề từ kho bài tập.');
       return;
     }
-    if (!studentName.trim()) {
+    const cleanName = studentName.trim();
+    if (!cleanName) {
       setErrorMsg('Vui lòng nhập Họ và tên của bạn.');
       return;
     }
@@ -156,7 +185,15 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
       className = customClassName.trim();
     }
 
-    onStartExam(assignment, studentName.trim(), selectedClassId || 'other', className);
+    // Persist student profile locally so they never have to re-enter
+    try {
+      localStorage.setItem('toan_thcs_student_name', cleanName);
+      localStorage.setItem('toan_thcs_student_class', className);
+    } catch {
+      // ignore
+    }
+
+    onStartExam(assignment, cleanName, selectedClassId || 'other', className);
   };
 
   // Filter exams in catalog
@@ -205,6 +242,12 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-md mx-auto">
           Nhập mã bài tập hoặc chọn đề thi từ kho luyện tập để bắt đầu làm bài và chấm điểm tức thì.
         </p>
+
+        {/* Reassurance Banner for Students */}
+        <div className="mt-3 inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs font-bold">
+          <UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span>Học sinh làm bài trực tiếp • Không cần đăng nhập tài khoản Google</span>
+        </div>
 
         {/* Tab switchers: Nhập mã vs Kho đề thi */}
         <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mt-5 border border-slate-200 dark:border-slate-700 shadow-2xs">
@@ -352,26 +395,40 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
               <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                 3. Lớp học <span className="text-rose-500">*</span>
               </label>
-              <select
-                value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white text-base cursor-pointer"
-              >
-                {classes.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    Lớp {cls.name} (Lớp {cls.grade}) - {cls.students?.length || 0} học sinh
-                  </option>
-                ))}
-                <option value="other">-- Lớp khác (Tự nhập) --</option>
-              </select>
+              {classes.length > 0 ? (
+                <>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white text-base cursor-pointer"
+                  >
+                    {classes.map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        Lớp {cls.name} (Lớp {cls.grade}) - {cls.students?.length || 0} học sinh
+                      </option>
+                    ))}
+                    <option value="other">-- Lớp khác (Tự nhập tên lớp) --</option>
+                  </select>
 
-              {selectedClassId === 'other' && (
+                  {selectedClassId === 'other' && (
+                    <input
+                      type="text"
+                      value={customClassName}
+                      onChange={(e) => setCustomClassName(e.target.value)}
+                      placeholder="Nhập tên lớp của bạn (Ví dụ: 6A1, 7A, 8B...)"
+                      className="mt-2 w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white text-sm"
+                      required={selectedClassId === 'other'}
+                    />
+                  )}
+                </>
+              ) : (
                 <input
                   type="text"
                   value={customClassName}
                   onChange={(e) => setCustomClassName(e.target.value)}
-                  placeholder="Nhập tên lớp của bạn (Ví dụ: 6A3)"
-                  className="mt-2 w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white text-sm"
+                  placeholder="Nhập tên lớp của bạn (Ví dụ: 6A1, 7A2, 8B, 9C...)"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white text-base"
+                  required
                 />
               )}
             </div>

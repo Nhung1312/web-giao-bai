@@ -21,6 +21,7 @@ export const EXAM_TEMPLATES_COLLECTION = 'exam_templates'; // MỚI: Collection 
 export const CONTESTS_COLLECTION = 'contests'; // MỚI: Collection cho Cuộc thi trực tuyến
 export const CONTEST_SUBMISSIONS_COLLECTION = 'contest_submissions'; // MỚI: Kết quả thi trực tuyến
 export const CONTEST_DRAFTS_COLLECTION = 'contest_drafts'; // MỚI: Lưu nháp thi trực tuyến
+export const TEACHERS_COLLECTION = 'teachers'; // Hồ sơ và dữ liệu đồng bộ của Giáo viên
 
 export class FirestoreService {
   /**
@@ -533,6 +534,79 @@ export class FirestoreService {
     } catch (error) {
       console.warn('[Firestore] Lỗi đọc nháp cuộc thi:', error);
       return null;
+    }
+  }
+
+  // ==========================================
+  // ĐỒNG BỘ DỮ LIỆU TÀI KHOẢN GIÁO VIÊN
+  // ==========================================
+
+  /**
+   * Lưu thông tin cấu hình và trạng thái của Giáo viên (cờ đã xóa dữ liệu mẫu, danh sách đề đã xóa)
+   */
+  static async saveTeacherProfile(
+    teacherId: string, 
+    data: Partial<{ 
+      email: string; 
+      displayName: string; 
+      hasClearedDemoData: boolean; 
+      deletedAssignmentKeys: string[];
+      classes: ClassRoom[];
+      updatedAt: string;
+    }>
+  ): Promise<void> {
+    if (!teacherId) return;
+    try {
+      const teacherDocRef = doc(db, TEACHERS_COLLECTION, teacherId);
+      await setDoc(teacherDocRef, {
+        ...data,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      console.log(`[Firestore] Đã lưu thông tin giáo viên ${teacherId} lên Cloud Firestore.`);
+    } catch (error) {
+      console.warn('[Firestore Error] Không thể lưu thông tin giáo viên:', error);
+    }
+  }
+
+  /**
+   * Đọc cấu hình và trạng thái của Giáo viên từ Cloud Firestore
+   */
+  static async getTeacherProfile(teacherId: string): Promise<{
+    email?: string;
+    displayName?: string;
+    hasClearedDemoData?: boolean;
+    deletedAssignmentKeys?: string[];
+    classes?: ClassRoom[];
+    [key: string]: any;
+  } | null> {
+    if (!teacherId) return null;
+    try {
+      const teacherDocRef = doc(db, TEACHERS_COLLECTION, teacherId);
+      const snap = await getDoc(teacherDocRef);
+      if (snap.exists()) {
+        return snap.data() as any;
+      }
+      return null;
+    } catch (error) {
+      console.warn('[Firestore Error] Lỗi đọc thông tin giáo viên:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lưu danh sách Lớp học của Giáo viên lên Cloud Firestore
+   */
+  static async saveTeacherClasses(teacherId: string, classes: ClassRoom[]): Promise<void> {
+    if (!teacherId) return;
+    try {
+      const teacherDocRef = doc(db, TEACHERS_COLLECTION, teacherId);
+      await setDoc(teacherDocRef, {
+        classes: classes || [],
+        classesUpdatedAt: new Date().toISOString()
+      }, { merge: true });
+      console.log(`[Firestore] Đã đồng bộ ${classes.length} lớp học của giáo viên ${teacherId} lên Cloud.`);
+    } catch (error) {
+      console.warn('[Firestore Error] Lỗi đồng bộ lớp học lên Firestore:', error);
     }
   }
 }

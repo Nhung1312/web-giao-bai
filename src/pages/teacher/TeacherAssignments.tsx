@@ -27,8 +27,10 @@ import {
   PieChart,
   Tag,
   Shuffle,
-  Edit3
+  Edit3,
+  Link2
 } from 'lucide-react';
+import { getAssignmentShareLink } from '../../utils/urlUtils';
 
 interface TeacherAssignmentsProps {
   assignments: Assignment[];
@@ -57,9 +59,21 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'questions' | 'duration'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [showFileUploadModal, setShowFileUploadModal] = useState(false);
   const [printingAssignment, setPrintingAssignment] = useState<Assignment | null>(null);
   const [similarExamAssignment, setSimilarExamAssignment] = useState<Assignment | null>(null);
+
+  const handleCopyLink = async (assignmentCode: string) => {
+    const link = getAssignmentShareLink(assignmentCode);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedLink(assignmentCode);
+      setTimeout(() => setCopiedLink(null), 2500);
+    } catch {
+      // fallback
+    }
+  };
 
   const handleImportQuestions = (questions: Question[]) => {
     onNavigate('create', {
@@ -478,22 +492,43 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                         {asg.assignmentCode}
                       </span>
                     </div>
-                    <button
-                      onClick={() => handleCopyCode(asg.assignmentCode)}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-slate-600 border border-indigo-200 dark:border-slate-600 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                    >
-                      {copiedCode === asg.assignmentCode ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span className="text-emerald-700 dark:text-emerald-400">Đã chép</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Chép mã</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => handleCopyCode(asg.assignmentCode)}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-slate-600 border border-indigo-200 dark:border-slate-600 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        title="Sao chép mã bài tập"
+                      >
+                        {copiedCode === asg.assignmentCode ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span className="text-emerald-700 dark:text-emerald-400">Đã chép</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Chép mã</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => handleCopyLink(asg.assignmentCode)}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                        title="Sao chép link làm bài gửi học sinh (Học sinh KHÔNG cần đăng nhập tài khoản)"
+                      >
+                        {copiedLink === asg.assignmentCode ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Đã chép link</span>
+                          </>
+                        ) : (
+                          <>
+                            <Link2 className="w-3.5 h-3.5" />
+                            <span>Chép link HS</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Details stats */}

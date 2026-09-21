@@ -33,14 +33,40 @@ function AppContent() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
 
-  // Student exam taking flow state
+  // Student exam taking flow state with sessionStorage restore support
   const [examSession, setExamSession] = useState<{
     assignment?: Assignment;
     studentName?: string;
     classId?: string;
     className?: string;
     submission?: Submission;
-  }>({});
+  }>(() => {
+    try {
+      const saved = sessionStorage.getItem('toan_thcs_exam_session');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // ignore
+    }
+    return {};
+  });
+
+  const updateExamSession = (session: typeof examSession | ((prev: typeof examSession) => typeof examSession)) => {
+    setExamSession(prev => {
+      const next = typeof session === 'function' ? session(prev) : session;
+      try {
+        if (next && (next.assignment || next.submission)) {
+          sessionStorage.setItem('toan_thcs_exam_session', JSON.stringify(next));
+        } else {
+          sessionStorage.removeItem('toan_thcs_exam_session');
+        }
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   // Share modal state
   const [shareAssignment, setShareAssignment] = useState<Assignment | null>(null);
@@ -67,14 +93,78 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  // Tự động đồng bộ hồ sơ Giáo viên (lớp học, cờ đã xóa dữ liệu mẫu) khi đăng nhập tài khoản
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const syncTeacherCloudData = async () => {
+      try {
+        const profile = await FirestoreService.getTeacherProfile(user.uid);
+        if (profile) {
+          // 1. Đồng bộ cờ đã xóa dữ liệu mẫu
+          if (profile.hasClearedDemoData) {
+            StorageService.setClearedDemoData(true);
+            if (Array.isArray(profile.deletedAssignmentKeys)) {
+              profile.deletedAssignmentKeys.forEach(k => StorageService.markAssignmentAsDeleted(k, k));
+            }
+          }
+
+          // 2. Đồng bộ danh sách Lớp học của Giáo viên
+          if (Array.isArray(profile.classes) && profile.classes.length > 0) {
+            localStorage.setItem('toan_thcs_classes_v4', JSON.stringify(profile.classes));
+            setClasses(profile.classes);
+          } else if (profile.hasClearedDemoData && (!profile.classes || profile.classes.length === 0)) {
+            localStorage.setItem('toan_thcs_classes_v4', JSON.stringify([]));
+            setClasses([]);
+          } else {
+            // Nếu trên Cloud chưa có lớp nhưng máy có lớp do giáo viên tạo -> Đẩy lên Cloud
+            const localCls = StorageService.getClasses();
+            if (localCls.length > 0) {
+              await FirestoreService.saveTeacherClasses(user.uid, localCls);
+            }
+          }
+        } else {
+          // Nếu trên Cloud chưa có hồ sơ giáo viên, lưu cấu hình hiện tại lên Cloud
+          const isCleared = StorageService.hasClearedDemoData();
+          const currentClasses = StorageService.getClasses();
+          const deletedKeys = Array.from(StorageService.getDeletedAssignmentKeys());
+          await FirestoreService.saveTeacherProfile(user.uid, {
+            email: user.email || '',
+            displayName: user.displayName || 'Giáo viên',
+            hasClearedDemoData: isCleared,
+            deletedAssignmentKeys: deletedKeys,
+            classes: currentClasses
+          });
+        }
+        await refreshAllData();
+      } catch (err) {
+        console.warn('Lỗi khi đồng bộ dữ liệu giáo viên từ Cloud:', err);
+      }
+    };
+
+    syncTeacherCloudData();
+  }, [user?.uid]);
+
   const refreshAllData = async () => {
     const deletedKeys = StorageService.getDeletedAssignmentKeys();
+    const isCleared = StorageService.hasClearedDemoData();
 
-    // 1. Instant local read (lọc bỏ các đề đã bị xóa)
+    const isSample = (a: Assignment) => {
+      if (!a) return false;
+      if (a.id.startsWith('asg_toan6_') || a.id.startsWith('asg_toan7_') || a.id.startsWith('asg_toan8_') || a.id.startsWith('asg_toan9_')) return true;
+      const c = (a.assignmentCode || '').toUpperCase().trim();
+      if (['TOAN6A1-8K4P', 'TOAN6-HINH1', 'TOAN7-DECUONG', 'TOAN7-TAMGIAC', 'TOAN8-HANGDANGTHUC', 'TOAN8-TUGIAC', 'TOAN9-CANTHUC', 'TOAN9-DUONGTRON'].includes(c)) return true;
+      if (c.includes('EUJ9') || c.includes('Y973') || c.includes('K74Z') || c.includes('FLMH')) return true;
+      return false;
+    };
+
+    // 1. Instant local read (lọc bỏ các đề đã bị xóa hoặc đề mẫu nếu đã xóa mẫu)
     const localClasses = StorageService.getClasses();
     const localAssignments = StorageService.getAssignments().filter(a => {
       const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
-      return !deletedKeys.has(a.id) && !deletedKeys.has(codeKey);
+      if (deletedKeys.has(a.id) || deletedKeys.has(codeKey)) return false;
+      if (isCleared && isSample(a)) return false;
+      return true;
     });
     const localSubmissions = StorageService.getSubmissions();
 
@@ -92,15 +182,17 @@ function AppContent() {
         localAssignments.forEach(a => {
           const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
           if (!deletedKeys.has(a.id) && !deletedKeys.has(codeKey)) {
-            map.set(codeKey, a);
+            if (!isCleared || !isSample(a)) {
+              map.set(codeKey, a);
+            }
           }
         });
 
         // Thêm các đề Cloud Firestore chưa bị người dùng xóa
         for (const a of cloudExams) {
           const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
-          if (deletedKeys.has(a.id) || deletedKeys.has(codeKey)) {
-            // Đề này đã bị người dùng xóa trước đó -> Dọn dẹp ngầm trên Firestore luôn
+          if (deletedKeys.has(a.id) || deletedKeys.has(codeKey) || (isCleared && isSample(a))) {
+            // Đề này đã bị người dùng xóa trước đó hoặc là đề mẫu -> Dọn dẹp ngầm trên Firestore luôn
             FirestoreService.deleteExam(a.id, a.assignmentCode).catch(() => {});
             continue;
           }
@@ -118,6 +210,13 @@ function AppContent() {
   const handleResetData = () => {
     if (window.confirm('Khôi phục toàn bộ dữ liệu về trạng thái mẫu ban đầu cho Lớp 6, 7, 8, 9?')) {
       StorageService.resetAllData();
+      if (user?.uid) {
+        FirestoreService.saveTeacherProfile(user.uid, {
+          hasClearedDemoData: false,
+          deletedAssignmentKeys: [],
+          classes: StorageService.getClasses()
+        }).catch(() => {});
+      }
       refreshAllData();
       alert('Đã khôi phục dữ liệu mẫu thành công!');
     }
@@ -125,7 +224,7 @@ function AppContent() {
 
   const handleClearDemoData = async () => {
     if (window.confirm('Bạn có chắc chắn muốn xóa hết toàn bộ dữ liệu mẫu (các đề thi, lớp học và kết quả nộp bài mẫu có sẵn)?\n\nLưu ý: Mọi bài tập hoặc lớp học do Thầy/Cô tự tạo thêm sẽ được giữ nguyên an toàn.')) {
-      const result = await StorageService.clearDemoDataAsync();
+      const result = await StorageService.clearDemoDataAsync(user?.uid);
       await refreshAllData();
       alert(`Đã xóa sạch dữ liệu mẫu thành công!\n• Đề mẫu đã xóa: ${result.deletedAssignments}\n• Lớp mẫu đã xóa: ${result.deletedClasses}\n• Lượt nộp mẫu đã xóa: ${result.deletedSubmissions}`);
     }
@@ -137,7 +236,7 @@ function AppContent() {
     classId: string,
     className: string
   ) => {
-    setExamSession({
+    updateExamSession({
       assignment,
       studentName,
       classId,
@@ -156,7 +255,7 @@ function AppContent() {
       // Record progress into Zustand persistent store
       useLearningProgressStore.getState().recordSubmission(submission, examSession.assignment);
     }
-    setExamSession(prev => ({
+    updateExamSession(prev => ({
       ...prev,
       submission
     }));
@@ -172,7 +271,7 @@ function AppContent() {
   };
 
   const handleTestAssignmentFromTeacher = (assignment: Assignment) => {
-    setExamSession({
+    updateExamSession({
       assignment,
       studentName: 'Giáo viên (Làm thử)',
       classId: assignment.classId,
@@ -227,6 +326,22 @@ function AppContent() {
             path="/join"
             element={<StudentJoinPage onStartExam={handleStartExam} />}
           />
+          <Route
+            path="/join/:code"
+            element={<StudentJoinPage onStartExam={handleStartExam} />}
+          />
+          <Route
+            path="/assignment/:code"
+            element={<StudentJoinPage onStartExam={handleStartExam} />}
+          />
+          <Route
+            path="/exam/:code"
+            element={<StudentJoinPage onStartExam={handleStartExam} />}
+          />
+          <Route
+            path="/test/:code"
+            element={<StudentJoinPage onStartExam={handleStartExam} />}
+          />
 
           {/* Student Active Exam Page */}
           <Route
@@ -256,7 +371,7 @@ function AppContent() {
                   assignment={examSession.assignment}
                   onRetake={handleRetakeExam}
                   onGoHome={() => {
-                    setExamSession({});
+                    updateExamSession({});
                     navigate('/');
                   }}
                 />

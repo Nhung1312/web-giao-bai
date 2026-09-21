@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Copy, Check, ExternalLink, X, Download, Share2, Trophy } from 'lucide-react';
+import { Copy, Check, ExternalLink, X, Download, Share2, Trophy, UserCheck } from 'lucide-react';
 import { Contest } from '../../types';
+import { getContestShareLink } from '../../utils/urlUtils';
 
 interface ContestQRModalProps {
   contest: Contest;
@@ -14,8 +15,8 @@ export const ContestQRModal: React.FC<ContestQRModalProps> = ({ contest, isOpen,
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const origin = window.location.origin;
-  const contestLink = `${origin}/contest/${contest.code}`;
+  // Link thi công khai cho học sinh (không bắt đăng nhập)
+  const contestLink = getContestShareLink(contest.code);
 
   useEffect(() => {
     if (isOpen && contest.code) {
@@ -94,6 +95,17 @@ export const ContestQRModal: React.FC<ContestQRModalProps> = ({ contest, isOpen,
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Khối {contest.grade} • {contest.durationMinutes} phút • {contest.questions.length} câu hỏi
             </p>
+          </div>
+
+          {/* Student No-Login Notice */}
+          <div className="p-3 bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-left flex items-start space-x-2.5">
+            <UserCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold block text-amber-900 dark:text-amber-300">Dành cho Học sinh:</span>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300/80 leading-relaxed">
+                Học sinh <strong>không cần đăng nhập tài khoản</strong>. Chỉ cần bấm vào link hoặc quét mã QR, sau đó điền <strong>Họ và tên</strong> cùng <strong>Lớp</strong> là làm bài được ngay.
+              </p>
+            </div>
           </div>
 
           {/* QR Container */}

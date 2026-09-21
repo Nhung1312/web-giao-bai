@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Copy, Check, ExternalLink, X, Download, Share2 } from 'lucide-react';
+import { Copy, Check, ExternalLink, X, Download, Share2, ShieldCheck, UserCheck } from 'lucide-react';
 import { Assignment } from '../types';
+import { getAssignmentShareLink } from '../utils/urlUtils';
 
 interface QRCodeModalProps {
   assignment: Assignment;
@@ -14,9 +15,8 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Link bài tập
-  const origin = window.location.origin;
-  const assignmentLink = `${origin}/join?code=${assignment.assignmentCode}`;
+  // Link bài tập công khai cho học sinh (không bắt đăng nhập)
+  const assignmentLink = getAssignmentShareLink(assignment.assignmentCode);
 
   useEffect(() => {
     if (isOpen && assignment.assignmentCode) {
@@ -104,6 +104,24 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
             )}
           </div>
 
+          {/* Guidance note for teachers */}
+          <div className="mb-3 p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs text-left flex items-start space-x-2.5">
+            <UserCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold block text-emerald-900">Quy trình đơn giản cho học sinh:</span>
+              <p className="text-[11px] text-emerald-700 leading-relaxed">
+                Học sinh <strong>không cần đăng nhập tài khoản</strong> và không cần mật khẩu. Khi mở link hoặc quét QR, học sinh chỉ cần điền <strong>Họ và tên</strong> là có thể làm bài ngay.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-4 p-2.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs text-left flex items-start space-x-2">
+            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              <strong>Lưu ý kích hoạt link công khai:</strong> Trên giao diện Google AI Studio, Thầy/Cô hãy bấm nút <strong>Share</strong> (Chia sẻ) ở thanh công cụ góc trên bên phải màn hình một lần để mở quyền truy cập cho học sinh bên ngoài.
+            </p>
+          </div>
+
           <p className="text-xs text-slate-500 mb-4">
             Học sinh dùng Zalo hoặc Camera điện thoại để quét mã QR làm bài ngay!
           </p>
@@ -119,7 +137,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
               </span>
               <button
                 onClick={handleCopyCode}
-                className="p-1.5 bg-white text-indigo-600 hover:text-indigo-800 rounded-lg border border-indigo-200 shadow-xs hover:bg-indigo-50 transition-all flex items-center text-xs font-medium"
+                className="p-1.5 bg-white text-indigo-600 hover:text-indigo-800 rounded-lg border border-indigo-200 shadow-xs hover:bg-indigo-50 transition-all flex items-center text-xs font-medium cursor-pointer"
                 title="Sao chép mã"
               >
                 {copiedCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
@@ -131,12 +149,12 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
           <div className="grid grid-cols-2 gap-2 text-sm">
             <button
               onClick={handleCopyLink}
-              className="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl border border-slate-300 font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl border border-slate-300 font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
               {copiedLink ? (
                 <>
                   <Check className="w-4 h-4 text-emerald-600" />
-                  <span className="text-emerald-700">Đã chép link</span>
+                  <span className="text-emerald-700 font-bold">Đã chép link</span>
                 </>
               ) : (
                 <>
@@ -148,7 +166,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
 
             <button
               onClick={handleDownloadQR}
-              className="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl border border-slate-300 font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl border border-slate-300 font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
               <Download className="w-4 h-4 text-slate-600" />
               <span>Tải ảnh QR</span>
@@ -158,12 +176,13 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
           {/* Test direct join button */}
           <div className="mt-4 pt-3 border-t border-slate-100">
             <a
-              href={`#assignment=${assignment.assignmentCode}`}
-              onClick={onClose}
+              href={`/join?code=${assignment.assignmentCode}`}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center justify-center w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-sm transition-all"
             >
               <ExternalLink className="w-4 h-4 mr-1.5" />
-              Mở trang làm bài ngay
+              Mở trang làm bài kiểm tra thử
             </a>
           </div>
         </div>
