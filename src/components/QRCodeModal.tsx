@@ -127,10 +127,10 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ assignment, isOpen, on
             </div>
           </div>
 
-          <div className="p-2.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs text-left flex items-start space-x-2">
-            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-amber-800 leading-relaxed">
-              <strong>Lưu ý khi gửi link cho học sinh ngoài:</strong> Nếu học sinh mở link báo lỗi 404, Thầy/Cô chỉ cần bấm nút <strong>Share</strong> (Chia sẻ) ở thanh công cụ góc trên bên phải màn hình Google AI Studio một lần để Google cấp quyền truy cập mạng công khai cho học sinh.
+          <div className="p-2.5 bg-sky-50 text-sky-800 border border-sky-200 rounded-xl text-xs text-left flex items-start space-x-2">
+            <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-sky-800 leading-relaxed">
+              <strong>Mẹo gửi link nhanh:</strong> Thầy/Cô chỉ cần bấm <strong>Chép link gửi HS</strong> rồi dán vào Zalo/Facebook nhóm lớp. Học sinh bấm vào link sẽ vào thẳng phòng thi và làm bài ngay lập tức.
             </p>
           </div>
 

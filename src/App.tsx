@@ -76,21 +76,44 @@ function AppContent() {
     StorageService.initDemoData();
     refreshAllData();
 
-    // Check URL Hash for legacy/direct assignment join e.g. #assignment=TOAN6A1-8K4P
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash.includes('assignment=')) {
-        const codeMatch = hash.match(/assignment=([^&]+)/);
-        if (codeMatch && codeMatch[1]) {
-          const code = decodeURIComponent(codeMatch[1]).trim().toUpperCase();
+    // Check URL query on root or Hash for legacy/direct assignment join e.g. #assignment=... or /?code=...
+    const handleUrlDirectJoin = () => {
+      // 1. Check Query parameter on root path
+      if (window.location.pathname === '/' || window.location.pathname === '') {
+        const params = new URLSearchParams(window.location.search);
+        const queryCode = params.get('code') || params.get('assignment');
+        if (queryCode) {
+          const code = decodeURIComponent(queryCode).trim().toUpperCase();
           navigate(`/join?code=${code}`);
+          return;
+        }
+      }
+
+      // 2. Check Hash e.g. #assignment=... or #/join?code=...
+      const hash = window.location.hash;
+      if (hash) {
+        if (hash.includes('assignment=')) {
+          const codeMatch = hash.match(/assignment=([^&]+)/);
+          if (codeMatch && codeMatch[1]) {
+            const code = decodeURIComponent(codeMatch[1]).trim().toUpperCase();
+            navigate(`/join?code=${code}`);
+            return;
+          }
+        }
+        if (hash.includes('code=')) {
+          const codeMatch = hash.match(/code=([^&]+)/);
+          if (codeMatch && codeMatch[1]) {
+            const code = decodeURIComponent(codeMatch[1]).trim().toUpperCase();
+            navigate(`/join?code=${code}`);
+            return;
+          }
         }
       }
     };
 
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    handleUrlDirectJoin();
+    window.addEventListener('hashchange', handleUrlDirectJoin);
+    return () => window.removeEventListener('hashchange', handleUrlDirectJoin);
   }, []);
 
   // Tự động đồng bộ hồ sơ Giáo viên khi đăng nhập tài khoản
