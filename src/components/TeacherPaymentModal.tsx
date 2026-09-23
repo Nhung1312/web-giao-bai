@@ -19,7 +19,8 @@ import {
 import { 
   SUBSCRIPTION_PLANS, 
   BANK_CONFIG, 
-  SubscriptionService 
+  SubscriptionService,
+  BILLING_ENABLED 
 } from '../services/subscriptionService';
 import { PaymentPlan, TeacherSubscription } from '../types';
 
@@ -143,7 +144,12 @@ export const TeacherPaymentModal: React.FC<TeacherPaymentModalProps> = ({
           <div className="mt-4 pt-3 border-t border-white/20 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center space-x-2">
               <span className="text-white/80">Trạng thái tài khoản:</span>
-              {subscription?.isVip ? (
+              {!BILLING_ENABLED ? (
+                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 font-bold border border-emerald-400/40">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Đang mở Trải nghiệm Miễn phí 100% (Đầy đủ tính năng)</span>
+                </span>
+              ) : subscription?.isVip ? (
                 <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 font-bold border border-emerald-400/40">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>Đã kích hoạt VIP {subscription.vipPlan === 'lifetime' ? 'Trọn đời' : ''}</span>

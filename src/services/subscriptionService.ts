@@ -12,6 +12,25 @@ import { TeacherSubscription, PaymentPlan, PaymentRequest, SubscriptionPlanId } 
 export const TEACHERS_COLLECTION = 'teachers';
 export const PAYMENTS_COLLECTION = 'payment_requests';
 
+/**
+ * ============================================================================
+ * CỜ CẤU HÌNH BẬT/TẮT CHẾ ĐỘ THU PHÍ TOÀN HỆ THỐNG (GLOBAL BILLING SWITCH)
+ * ============================================================================
+ * 
+ * - ĐẶT false (HIỆN TẠI): TẠM THỜI TẮT toàn bộ cơ chế thu phí/gia hạn.
+ *   → Tất cả người dùng/giáo viên được sử dụng toàn bộ tính năng miễn phí 100%.
+ *   → Bỏ qua mọi giới hạn hết hạn, không tự động khóa tài khoản.
+ *   → Ẩn banner và cảnh báo hết hạn/yêu cầu gia hạn.
+ *   → Không can thiệp hoặc làm mất dữ liệu người dùng/lịch sử thanh toán.
+ * 
+ * - ĐẶT true (SAU NÀY): BẬT LẠI toàn bộ cơ chế tính phí/gia hạn ban đầu.
+ *   → Khôi phục kiểm tra 15 ngày dùng thử, kiểm tra tài khoản hết hạn,
+ *     yêu cầu thanh toán và hiển thị đầy đủ cảnh báo gia hạn.
+ * 
+ * >>> ĐỔI GIÁ TRỊ TẠI DÒNG DƯỚI ĐÂY THÀNH true ĐỂ BẬT LẠI CHẾ ĐỘ TRẢ PHÍ <<<
+ */
+export const BILLING_ENABLED = false;
+
 // Thông tin tài khoản ngân hàng nhận thanh toán (từ VietQR của cô Nguyễn Thị Nhung)
 export const BANK_CONFIG = {
   bankId: 'agribank', // Napas Bin: 970405
@@ -45,6 +64,34 @@ export const SUBSCRIPTION_PLANS: PaymentPlan[] = [
 ];
 
 export class SubscriptionService {
+  /**
+   * Kiểm tra xem hệ thống có đang bật chế độ thu phí hay không
+   */
+  static isBillingEnabled(): boolean {
+    return BILLING_ENABLED;
+  }
+
+  /**
+   * Kiểm tra quyền truy cập tính năng (Tạo đề, AI chấm bài, Xuất bản đề thi, v.v.)
+   * Khi BILLING_ENABLED = false: Luôn cho phép truy cập đầy đủ (trả về true).
+   * Khi BILLING_ENABLED = true: Kiểm tra trạng thái gói thực tế (chỉ khóa nếu đã expired).
+   */
+  static hasFeatureAccess(sub?: TeacherSubscription | null): boolean {
+    if (!BILLING_ENABLED) return true;
+    if (!sub) return true;
+    return sub.status !== 'expired';
+  }
+
+  /**
+   * Kiểm tra xem tài khoản có bị coi là hết hạn hay không
+   * Khi BILLING_ENABLED = false: Không bao giờ bị hết hạn (trả về false).
+   * Khi BILLING_ENABLED = true: Phản ánh đúng trạng thái thực tế ('expired').
+   */
+  static isExpired(sub?: TeacherSubscription | null): boolean {
+    if (!BILLING_ENABLED) return false;
+    return sub?.status === 'expired';
+  }
+
   private static getStorageKey(teacherId: string): string {
     return `toan_thcs_sub_${teacherId}`;
   }
@@ -140,8 +187,8 @@ export class SubscriptionService {
           registeredAt: now.toISOString(),
           trialEndsAt: trialEnd.toISOString(),
           isVip: false,
-          status: 'trial',
-          daysLeft: 15
+          status: this.computeStatus(false, null, trialEnd.toISOString()),
+          daysLeft: this.computeDaysLeft(trialEnd.toISOString())
         };
 
         // Lưu vào Cloud Firestore
@@ -168,15 +215,16 @@ export class SubscriptionService {
 
       // Khởi tạo tạm 15 ngày dùng thử nếu chưa từng có dữ liệu
       const now = new Date();
+      const trialEndTime = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString();
       const fallbackSub: TeacherSubscription = {
         teacherId,
         email: user.email || '',
         displayName: user.displayName || 'Giáo viên',
         registeredAt: now.toISOString(),
-        trialEndsAt: new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+        trialEndsAt: trialEndTime,
         isVip: false,
-        status: 'trial',
-        daysLeft: 15
+        status: this.computeStatus(false, null, trialEndTime),
+        daysLeft: this.computeDaysLeft(trialEndTime)
       };
       return fallbackSub;
     }
@@ -186,6 +234,10 @@ export class SubscriptionService {
    * Tính số ngày dùng thử còn lại
    */
   private static computeDaysLeft(trialEndsAt: string): number {
+    if (!BILLING_ENABLED) {
+      // Khi tạm tắt thu phí: không tính hạn đếm ngược
+      return 999;
+    }
     const end = new Date(trialEndsAt).getTime();
     const now = Date.now();
     const diff = end - now;
@@ -197,6 +249,11 @@ export class SubscriptionService {
    * Xác định trạng thái tài khoản
    */
   private static computeStatus(isVip: boolean, vipExpiresAt?: string | null, trialEndsAt?: string): 'trial' | 'active' | 'expired' {
+    if (!BILLING_ENABLED) {
+      // Khi tạm tắt thu phí: toàn bộ tài khoản luôn ở trạng thái 'active' để sử dụng trọn vẹn mọi tính năng
+      return 'active';
+    }
+
     if (isVip) {
       if (!vipExpiresAt) return 'active'; // Trọn đời
       const exp = new Date(vipExpiresAt).getTime();

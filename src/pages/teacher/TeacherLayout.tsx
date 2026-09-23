@@ -11,7 +11,7 @@ import { TeacherContests } from './contest/TeacherContests'; // MỚI: Import Qu
 import { TeacherCreateContest } from './contest/TeacherCreateContest'; // MỚI: Import Tạo cuộc thi
 import { TeacherContestResults } from './contest/TeacherContestResults'; // MỚI: Import Kết quả cuộc thi
 import { TeacherPaymentModal } from '../../components/TeacherPaymentModal';
-import { SubscriptionService } from '../../services/subscriptionService';
+import { SubscriptionService, BILLING_ENABLED } from '../../services/subscriptionService';
 import { useAuth } from '../../context/AuthContext';
 import { 
   LayoutDashboard, 
@@ -77,7 +77,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
   };
 
   const handleNavigate = (tab: string, params?: any) => {
-    if (tab === 'create' && subscription?.status === 'expired') {
+    // Chỉ chặn khi BILLING_ENABLED = true và tài khoản hết hạn
+    if (BILLING_ENABLED && tab === 'create' && SubscriptionService.isExpired(subscription)) {
       setShowPaymentModal(true);
       return;
     }
@@ -142,7 +143,21 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
 
             {/* Teacher Subscription Pill / Upgrade Trigger */}
             <div className="pl-2 shrink-0">
-              {subscription?.isVip ? (
+              {!BILLING_ENABLED ? (
+                /* Chế độ Trải nghiệm Miễn phí toàn hệ thống: Hiển thị badge thân thiện */
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(true)}
+                  title="Hệ thống đang mở trải nghiệm miễn phí tất cả tính năng cho Thầy Cô (Nhấn để xem thông tin gói bản quyền)"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/15 to-teal-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/40 text-xs font-extrabold transition-all cursor-pointer shadow-2xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="hidden sm:inline">Trải nghiệm</span>
+                  <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                    Miễn phí
+                  </span>
+                </button>
+              ) : subscription?.isVip ? (
                 <button
                   type="button"
                   onClick={() => setShowPaymentModal(true)}
@@ -181,8 +196,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         </div>
       </div>
 
-      {/* Expired Warning Banner */}
-      {subscription?.status === 'expired' && (
+      {/* Expired Warning Banner: Chỉ hiển thị khi BILLING_ENABLED = true và tài khoản hết hạn */}
+      {BILLING_ENABLED && subscription?.status === 'expired' && (
         <div className="bg-gradient-to-r from-rose-600 via-rose-700 to-amber-600 text-white py-3 px-4 shadow-md">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center space-x-2.5">
