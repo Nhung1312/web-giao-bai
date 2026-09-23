@@ -13,6 +13,7 @@ import {
   GRADE9_ASSIGNMENTS
 } from '../data';
 import { FirestoreService } from './firestoreService';
+import { auth } from '../firebase';
 
 const STORAGE_KEYS = {
   CLASSES: 'toan_thcs_classes_v4',
@@ -264,24 +265,26 @@ export class StorageService {
     // Tập hợp ID các đề mẫu gốc
     const sampleAssignmentIds = new Set(INITIAL_ALL_ASSIGNMENTS.map(a => a.id));
     const isSampleAssignment = (a: Assignment) =>
-      sampleAssignmentIds.has(a.id) ||
-      a.id.startsWith('asg_toan6_') ||
-      a.id.startsWith('asg_toan7_') ||
-      a.id.startsWith('asg_toan8_') ||
-      a.id.startsWith('asg_toan9_') ||
-      (a.assignmentCode && (
-        a.assignmentCode.includes('EUJ9') ||
-        a.assignmentCode.includes('Y973') ||
-        a.assignmentCode.includes('K74Z') ||
-        a.assignmentCode.includes('FLMH') ||
-        a.assignmentCode === 'TOAN6A1-8K4P' ||
-        a.assignmentCode === 'TOAN6-HINH1' ||
-        a.assignmentCode === 'TOAN7-DECUONG' ||
-        a.assignmentCode === 'TOAN7-TAMGIAC' ||
-        a.assignmentCode === 'TOAN8-HANGDANGTHUC' ||
-        a.assignmentCode === 'TOAN8-TUGIAC' ||
-        a.assignmentCode === 'TOAN9-CANTHUC' ||
-        a.assignmentCode === 'TOAN9-DUONGTRON'
+      Boolean(a && a.id && (
+        sampleAssignmentIds.has(a.id) ||
+        a.id.startsWith('asg_toan6_') ||
+        a.id.startsWith('asg_toan7_') ||
+        a.id.startsWith('asg_toan8_') ||
+        a.id.startsWith('asg_toan9_') ||
+        (a.assignmentCode && (
+          a.assignmentCode.includes('EUJ9') ||
+          a.assignmentCode.includes('Y973') ||
+          a.assignmentCode.includes('K74Z') ||
+          a.assignmentCode.includes('FLMH') ||
+          a.assignmentCode === 'TOAN6A1-8K4P' ||
+          a.assignmentCode === 'TOAN6-HINH1' ||
+          a.assignmentCode === 'TOAN7-DECUONG' ||
+          a.assignmentCode === 'TOAN7-TAMGIAC' ||
+          a.assignmentCode === 'TOAN8-HANGDANGTHUC' ||
+          a.assignmentCode === 'TOAN8-TUGIAC' ||
+          a.assignmentCode === 'TOAN9-CANTHUC' ||
+          a.assignmentCode === 'TOAN9-DUONGTRON'
+        ))
       ));
 
     // Tập hợp ID các lớp mẫu gốc
@@ -331,24 +334,26 @@ export class StorageService {
     const currentAssignments = this.getAssignments();
     const sampleAssignmentIds = new Set(INITIAL_ALL_ASSIGNMENTS.map(a => a.id));
     const isSampleAssignment = (a: Assignment) =>
-      sampleAssignmentIds.has(a.id) ||
-      a.id.startsWith('asg_toan6_') ||
-      a.id.startsWith('asg_toan7_') ||
-      a.id.startsWith('asg_toan8_') ||
-      a.id.startsWith('asg_toan9_') ||
-      (a.assignmentCode && (
-        a.assignmentCode.includes('EUJ9') ||
-        a.assignmentCode.includes('Y973') ||
-        a.assignmentCode.includes('K74Z') ||
-        a.assignmentCode.includes('FLMH') ||
-        a.assignmentCode === 'TOAN6A1-8K4P' ||
-        a.assignmentCode === 'TOAN6-HINH1' ||
-        a.assignmentCode === 'TOAN7-DECUONG' ||
-        a.assignmentCode === 'TOAN7-TAMGIAC' ||
-        a.assignmentCode === 'TOAN8-HANGDANGTHUC' ||
-        a.assignmentCode === 'TOAN8-TUGIAC' ||
-        a.assignmentCode === 'TOAN9-CANTHUC' ||
-        a.assignmentCode === 'TOAN9-DUONGTRON'
+      Boolean(a && a.id && (
+        sampleAssignmentIds.has(a.id) ||
+        a.id.startsWith('asg_toan6_') ||
+        a.id.startsWith('asg_toan7_') ||
+        a.id.startsWith('asg_toan8_') ||
+        a.id.startsWith('asg_toan9_') ||
+        (a.assignmentCode && (
+          a.assignmentCode.includes('EUJ9') ||
+          a.assignmentCode.includes('Y973') ||
+          a.assignmentCode.includes('K74Z') ||
+          a.assignmentCode.includes('FLMH') ||
+          a.assignmentCode === 'TOAN6A1-8K4P' ||
+          a.assignmentCode === 'TOAN6-HINH1' ||
+          a.assignmentCode === 'TOAN7-DECUONG' ||
+          a.assignmentCode === 'TOAN7-TAMGIAC' ||
+          a.assignmentCode === 'TOAN8-HANGDANGTHUC' ||
+          a.assignmentCode === 'TOAN8-TUGIAC' ||
+          a.assignmentCode === 'TOAN9-CANTHUC' ||
+          a.assignmentCode === 'TOAN9-DUONGTRON'
+        ))
       ));
 
     const sampleAssignments = currentAssignments.filter(isSampleAssignment);
@@ -389,10 +394,18 @@ export class StorageService {
       if (data !== null) {
         const list = JSON.parse(data);
         if (Array.isArray(list)) {
+          const safeList = list
+            .filter((c): c is ClassRoom => Boolean(c && typeof c === 'object' && c.id))
+            .map(c => ({
+              ...c,
+              name: c.name || 'Lớp học',
+              grade: c.grade || '6',
+              students: Array.isArray(c.students) ? c.students : []
+            }));
           if (isCleared) {
-            return list.filter(c => !['class_6a1', 'class_7a2', 'class_8a1', 'class_9a3'].includes(c.id));
+            return safeList.filter(c => !['class_6a1', 'class_7a2', 'class_8a1', 'class_9a3'].includes(c.id));
           }
-          return list;
+          return safeList;
         }
       }
       return isCleared ? [] : INITIAL_CLASSES;
@@ -405,6 +418,11 @@ export class StorageService {
     return this.getClasses().find(c => c.id === classId);
   }
 
+  static setClasses(classes: ClassRoom[]): void {
+    const safe = Array.isArray(classes) ? classes : [];
+    localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(safe));
+  }
+
   static saveClass(classRoom: ClassRoom): void {
     const classes = this.getClasses();
     const index = classes.findIndex(c => c.id === classRoom.id);
@@ -414,11 +432,25 @@ export class StorageService {
       classes.unshift(classRoom);
     }
     localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
+
+    // Tự động đẩy danh sách lớp học lên Cloud nếu đã đăng nhập
+    if (auth.currentUser?.uid) {
+      FirestoreService.saveTeacherClasses(auth.currentUser.uid, classes).catch(err => {
+        console.warn('[StorageService] Lỗi tự động lưu lớp lên Firestore:', err);
+      });
+    }
   }
 
   static deleteClass(classId: string): void {
     const classes = this.getClasses().filter(c => c.id !== classId);
     localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
+
+    // Tự động cập nhật danh sách lớp học lên Cloud nếu đã đăng nhập
+    if (auth.currentUser?.uid) {
+      FirestoreService.saveTeacherClasses(auth.currentUser.uid, classes).catch(err => {
+        console.warn('[StorageService] Lỗi tự động cập nhật xóa lớp lên Firestore:', err);
+      });
+    }
   }
 
   // --- ASSIGNMENTS ---
@@ -428,7 +460,7 @@ export class StorageService {
     const isCleared = this.hasClearedDemoData();
 
     const isSampleAssignment = (a: Assignment) => {
-      if (!a) return false;
+      if (!a || !a.id) return false;
       if (a.id.startsWith('asg_toan6_') || a.id.startsWith('asg_toan7_') || a.id.startsWith('asg_toan8_') || a.id.startsWith('asg_toan9_')) return true;
       const c = (a.assignmentCode || '').replace(/\s+/g, '').toUpperCase();
       if (['TOAN6A1-8K4P', 'TOAN6-HINH1', 'TOAN7-DECUONG', 'TOAN7-TAMGIAC', 'TOAN8-HANGDANGTHUC', 'TOAN8-TUGIAC', 'TOAN9-CANTHUC', 'TOAN9-DUONGTRON'].includes(c)) return true;
@@ -440,12 +472,23 @@ export class StorageService {
       const data = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
       const rawList: Assignment[] = data !== null ? JSON.parse(data) : (isCleared ? [] : INITIAL_ASSIGNMENTS);
       if (!Array.isArray(rawList)) return [];
-      return rawList.filter(a => {
-        const c = (a.assignmentCode || '').replace(/\s+/g, '').toUpperCase();
-        if (deletedKeys.has(a.id) || deletedKeys.has(c)) return false;
-        if (isCleared && isSampleAssignment(a)) return false;
-        return true;
-      });
+      return rawList
+        .filter((a): a is Assignment => Boolean(a && typeof a === 'object' && a.id))
+        .map(a => ({
+          ...a,
+          title: a.title || 'Bài tập',
+          grade: a.grade || '6',
+          topic: a.topic || 'Toán học',
+          questions: Array.isArray(a.questions) ? a.questions : [],
+          assignmentCode: a.assignmentCode || a.id || '',
+          isPublished: a.isPublished !== false
+        }))
+        .filter(a => {
+          const c = (a.assignmentCode || a.id || '').replace(/\s+/g, '').toUpperCase();
+          if (deletedKeys.has(a.id) || (c && deletedKeys.has(c))) return false;
+          if (isCleared && isSampleAssignment(a)) return false;
+          return true;
+        });
     } catch {
       return isCleared ? [] : INITIAL_ASSIGNMENTS;
     }
@@ -465,6 +508,11 @@ export class StorageService {
     return this.getAssignments().find(a => a.assignmentCode.toUpperCase() === cleanCode);
   }
 
+  static setAssignments(assignments: Assignment[]): void {
+    const safe = Array.isArray(assignments) ? assignments : [];
+    localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(safe));
+  }
+
   static saveAssignment(assignment: Assignment): void {
     this.unmarkAssignmentAsDeleted(assignment.id, assignment.assignmentCode);
     const assignments = this.getAssignments();
@@ -475,6 +523,30 @@ export class StorageService {
       assignments.unshift(assignment);
     }
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
+
+    // Tự động đẩy đề thi lên Cloud Firestore nếu người dùng đã đăng nhập
+    if (auth.currentUser) {
+      FirestoreService.saveExam(assignment, auth.currentUser ? {
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email || '',
+        displayName: auth.currentUser.displayName || ''
+      } : undefined).catch(err => {
+        console.warn('[StorageService] Lỗi tự động lưu đề thi lên Firestore:', err);
+      });
+    }
+  }
+
+  static async saveAssignmentAsync(assignment: Assignment, teacherUser?: any): Promise<void> {
+    this.saveAssignment(assignment);
+    try {
+      await FirestoreService.saveExam(assignment, teacherUser || (auth.currentUser ? {
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email || '',
+        displayName: auth.currentUser.displayName || ''
+      } : undefined));
+    } catch (err) {
+      console.error('[StorageService] Lỗi lưu đề thi lên Firestore:', err);
+    }
   }
 
   /**
@@ -519,32 +591,69 @@ export class StorageService {
     this.initDemoData();
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SUBMISSIONS);
-      return data !== null ? JSON.parse(data) : INITIAL_SUBMISSIONS;
+      if (data !== null) {
+        const list = JSON.parse(data);
+        return Array.isArray(list) ? list.filter((s): s is Submission => Boolean(s && typeof s === 'object' && s.id)) : [];
+      }
+      return INITIAL_SUBMISSIONS || [];
     } catch {
-      return INITIAL_SUBMISSIONS;
+      return INITIAL_SUBMISSIONS || [];
     }
   }
 
   static getSubmissionsByAssignment(assignmentId: string): Submission[] {
-    return this.getSubmissions().filter(s => s.assignmentId === assignmentId);
+    return this.getSubmissions().filter(s => Boolean(s && s.assignmentId === assignmentId));
+  }
+
+  static setSubmissions(submissions: Submission[]): void {
+    const safe = Array.isArray(submissions) ? submissions : [];
+    localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(safe));
   }
 
   static saveSubmission(submission: Submission): void {
     const submissions = this.getSubmissions();
-    submissions.unshift(submission);
+    const idx = submissions.findIndex(s => s.id === submission.id);
+    if (idx >= 0) {
+      submissions[idx] = submission;
+    } else {
+      submissions.unshift(submission);
+    }
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(submissions));
+
+    // Luôn ghi trực tiếp lên Cloud Firestore để giáo viên trên máy khác xem được
+    FirestoreService.saveResult(submission).catch(err => {
+      console.warn('[StorageService] Lỗi tự động lưu kết quả lên Firestore:', err);
+    });
+  }
+
+  static async saveSubmissionAsync(submission: Submission): Promise<void> {
+    this.saveSubmission(submission);
+    try {
+      await FirestoreService.saveResult(submission);
+    } catch (err) {
+      console.error('[StorageService] Lỗi lưu kết quả bài làm lên Firestore:', err);
+    }
   }
 
   // ==========================================
-  // MỚI: QUẢN LÝ CUỘC THI TRỰC TUYẾN (CONTESTS)
+  // QUẢN LÝ CUỘC THI TRỰC TUYẾN (CONTESTS)
   // ==========================================
   static getContests(): import('../types').Contest[] {
     try {
       const data = localStorage.getItem('toan_thcs_contests_v4');
-      return data ? JSON.parse(data) : [];
+      if (data) {
+        const list = JSON.parse(data);
+        return Array.isArray(list) ? list : [];
+      }
+      return [];
     } catch {
       return [];
     }
+  }
+
+  static setContests(contests: import('../types').Contest[]): void {
+    const safe = Array.isArray(contests) ? contests : [];
+    localStorage.setItem('toan_thcs_contests_v4', JSON.stringify(safe));
   }
 
   static getContestById(id: string): import('../types').Contest | null {
@@ -568,24 +677,63 @@ export class StorageService {
       list.unshift(contest);
     }
     localStorage.setItem('toan_thcs_contests_v4', JSON.stringify(list));
+
+    // Đồng bộ lên Cloud Firestore
+    const teacherUser = auth.currentUser ? {
+      uid: auth.currentUser.uid,
+      email: auth.currentUser.email || '',
+      displayName: auth.currentUser.displayName || ''
+    } : undefined;
+    FirestoreService.saveContest(contest, teacherUser).catch(err => {
+      console.warn('[StorageService] Lỗi tự động lưu cuộc thi lên Firestore:', err);
+    });
+  }
+
+  static async saveContestAsync(contest: import('../types').Contest, teacherUser?: any): Promise<void> {
+    this.saveContest(contest);
+    try {
+      await FirestoreService.saveContest(contest, teacherUser);
+    } catch (err) {
+      console.error('[StorageService] Lỗi lưu cuộc thi lên Firestore:', err);
+    }
   }
 
   static deleteContest(contestId: string): void {
     const list = this.getContests().filter(c => c.id !== contestId && c.code !== contestId);
     localStorage.setItem('toan_thcs_contests_v4', JSON.stringify(list));
+
+    // Xóa trên Firestore
+    FirestoreService.deleteContest(contestId).catch(err => {
+      console.warn('[StorageService] Lỗi xóa cuộc thi trên Firestore:', err);
+    });
+  }
+
+  static async deleteContestAsync(contestId: string): Promise<void> {
+    this.deleteContest(contestId);
+    try {
+      await FirestoreService.deleteContest(contestId);
+    } catch (err) {
+      console.error('[StorageService] Lỗi xóa cuộc thi trên Firestore:', err);
+    }
   }
 
   static getContestSubmissions(contestId?: string): import('../types').ContestSubmission[] {
     try {
       const data = localStorage.getItem('toan_thcs_contest_submissions_v4');
       const list: import('../types').ContestSubmission[] = data ? JSON.parse(data) : [];
+      const safeList = Array.isArray(list) ? list : [];
       if (contestId) {
-        return list.filter(s => s.contestId === contestId || s.contestCode.toUpperCase() === contestId.toUpperCase());
+        return safeList.filter(s => s.contestId === contestId || s.contestCode.toUpperCase() === contestId.toUpperCase());
       }
-      return list;
+      return safeList;
     } catch {
       return [];
     }
+  }
+
+  static setContestSubmissions(submissions: import('../types').ContestSubmission[]): void {
+    const safe = Array.isArray(submissions) ? submissions : [];
+    localStorage.setItem('toan_thcs_contest_submissions_v4', JSON.stringify(safe));
   }
 
   static saveContestSubmission(submission: import('../types').ContestSubmission): void {
@@ -597,6 +745,20 @@ export class StorageService {
       list.unshift(submission);
     }
     localStorage.setItem('toan_thcs_contest_submissions_v4', JSON.stringify(list));
+
+    // Đồng bộ lên Cloud Firestore
+    FirestoreService.saveContestSubmission(submission).catch(err => {
+      console.warn('[StorageService] Lỗi tự động lưu bài nộp cuộc thi lên Firestore:', err);
+    });
+  }
+
+  static async saveContestSubmissionAsync(submission: import('../types').ContestSubmission): Promise<void> {
+    this.saveContestSubmission(submission);
+    try {
+      await FirestoreService.saveContestSubmission(submission);
+    } catch (err) {
+      console.error('[StorageService] Lỗi lưu bài nộp cuộc thi lên Firestore:', err);
+    }
   }
 
   /**

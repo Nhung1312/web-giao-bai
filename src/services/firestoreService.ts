@@ -1,5 +1,6 @@
 import { 
   db, 
+  auth,
   collection, 
   doc, 
   getDoc, 
@@ -23,6 +24,44 @@ export const CONTEST_SUBMISSIONS_COLLECTION = 'contest_submissions'; // MỚI: K
 export const CONTEST_DRAFTS_COLLECTION = 'contest_drafts'; // MỚI: Lưu nháp thi trực tuyến
 export const TEACHERS_COLLECTION = 'teachers'; // Hồ sơ và dữ liệu đồng bộ của Giáo viên
 
+/**
+ * Hàm làm sạch dữ liệu trước khi gửi lên Cloud Firestore.
+ * Trong Firebase SDK, nếu bất kỳ trường nào có giá trị `undefined`,
+ * setDoc sẽ throw Exception "Unsupported field value: undefined" và hủy toàn bộ thao tác ghi.
+ * Hàm này loại bỏ 100% các giá trị undefined ở mọi cấp độ sâu để đảm bảo ghi thành công tuyệt đối.
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === undefined || data === null) return data;
+  return JSON.parse(JSON.stringify(data));
+}
+
+/**
+ * Helper chuẩn hóa tài liệu đề thi từ Firestore để đảm bảo không bao giờ bị undefined
+ * (nhất là mảng questions, assignmentCode, title) gây lỗi trắng màn hình (WSOD)
+ */
+export function normalizeAssignmentDoc(data: any, id: string): Assignment {
+  const safeData = (data && typeof data === 'object') ? data : {};
+  return {
+    ...safeData,
+    id: id || safeData.id || `asg_${Date.now()}`,
+    title: safeData.title || 'Bài tập',
+    grade: safeData.grade || '6',
+    topic: safeData.topic || 'Toán học',
+    classId: safeData.classId || 'all',
+    className: safeData.className || 'Tất cả học sinh',
+    questions: Array.isArray(safeData.questions) ? safeData.questions : [],
+    durationMinutes: Number(safeData.durationMinutes) || 0,
+    deadline: safeData.deadline || '',
+    allowViewResult: safeData.allowViewResult !== false,
+    assignmentCode: safeData.assignmentCode || id || '',
+    createdAt: safeData.createdAt || new Date().toISOString(),
+    isPublished: safeData.isPublished !== false,
+    type: safeData.type || (safeData.pdfUrl ? 'pdf' : 'text'),
+    pdfUrl: safeData.pdfUrl || undefined,
+    templateId: safeData.templateId || undefined
+  };
+}
+
 export class FirestoreService {
   /**
    * 1. Lưu đề thi mới hoặc cập nhật đề thi vào Firestore collection "exams"
@@ -33,21 +72,30 @@ export class FirestoreService {
   ): Promise<void> {
     try {
       const examDocRef = doc(db, EXAMS_COLLECTION, assignment.id);
+      const currentAuthUser = auth.currentUser;
+      const effectiveTeacher = teacherUser || (currentAuthUser ? {
+        uid: currentAuthUser.uid,
+        email: currentAuthUser.email || '',
+        displayName: currentAuthUser.displayName || 'Giáo viên'
+      } : undefined);
        
       const payload: any = {
         ...assignment,
-        assignmentCode: assignment.assignmentCode.toUpperCase().trim(),
+        assignmentCode: (assignment.assignmentCode || '').toUpperCase().trim(),
         updatedAt: new Date().toISOString()
       };
 
-      if (teacherUser) {
-        payload.teacherId = teacherUser.uid;
-        payload.teacherEmail = teacherUser.email || '';
-        payload.teacherName = teacherUser.displayName || 'Giáo viên';
+      if (effectiveTeacher?.uid) {
+        payload.teacherId = effectiveTeacher.uid;
+        payload.teacherEmail = effectiveTeacher.email || '';
+        payload.teacherName = effectiveTeacher.displayName || 'Giáo viên';
       }
 
-      await setDoc(examDocRef, payload, { merge: true });
-      console.log(`[Firestore] Đã lưu đề thi ${assignment.id} (${assignment.assignmentCode}) lên Cloud Firestore.`);
+      // Làm sạch toàn bộ các giá trị undefined trước khi setDoc
+      const cleanPayload = sanitizeForFirestore(payload);
+
+      await setDoc(examDocRef, cleanPayload, { merge: true });
+      console.log(`[Firestore] Đã lưu đề thi ${assignment.id} (${assignment.assignmentCode}) lên Cloud Firestore thành công.`);
     } catch (error) {
       console.error('[Firestore Error] Không thể lưu đề thi lên Firestore:', error);
       throw error;
@@ -70,20 +118,25 @@ export class FirestoreService {
       const querySnapshot = await getDocs(q);
        
       if (!querySnapshot.empty) {
-        const docData = querySnapshot.docs[0].data() as Assignment;
-        return {
-          ...docData,
-          id: querySnapshot.docs[0].id
-        };
+        return normalizeAssignmentDoc(querySnapshot.docs[0].data(), querySnapshot.docs[0].id);
       }
 
       const docRef = doc(db, EXAMS_COLLECTION, cleanCode);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        return {
-          ...(docSnap.data() as Assignment),
-          id: docSnap.id
-        };
+        return normalizeAssignmentDoc(docSnap.data(), docSnap.id);
+      }
+
+      // Dự phòng tìm kiếm mềm (bỏ dấu gạch ngang hoặc khoảng trắng thừa)
+      const codeNoDash = cleanCode.replace(/[^A-Z0-9]/g, '');
+      if (codeNoDash) {
+        const allExams = await this.getExams();
+        const found = allExams.find(e => {
+          const rawCode = (e.assignmentCode || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          const rawId = (e.id || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          return rawCode === codeNoDash || rawId === codeNoDash;
+        });
+        if (found) return found;
       }
 
       return null;
@@ -101,10 +154,7 @@ export class FirestoreService {
       const docRef = doc(db, EXAMS_COLLECTION, id);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        return {
-          ...(docSnap.data() as Assignment),
-          id: docSnap.id
-        };
+        return normalizeAssignmentDoc(docSnap.data(), docSnap.id);
       }
       return null;
     } catch (error) {
@@ -125,7 +175,7 @@ export class FirestoreService {
         createdAt: new Date().toISOString()
       };
 
-      await setDoc(resultDocRef, payload, { merge: true });
+      await setDoc(resultDocRef, sanitizeForFirestore(payload), { merge: true });
       console.log(`[Firestore] Đã lưu kết quả bài nộp của học sinh ${submission.studentName} (${submission.totalScore}đ) lên Cloud Firestore.`);
     } catch (error) {
       console.error('[Firestore Error] Không thể lưu kết quả nộp bài lên Firestore:', error);
@@ -134,29 +184,50 @@ export class FirestoreService {
   }
 
   /**
-   * Lấy danh sách đề thi của giáo viên hoặc toàn bộ đề trên Firestore
+   * Lấy danh sách đề thi của giáo viên (lọc theo teacherId) hoặc toàn bộ đề trên Firestore
    */
-  static async getExams(teacherId?: string): Promise<Assignment[]> {
+  static async getExams(teacherId?: string, teacherEmail?: string | null): Promise<Assignment[]> {
     try {
-      let q;
-      if (teacherId) {
-        q = query(
-          collection(db, EXAMS_COLLECTION),
-          where('teacherId', '==', teacherId)
-        );
-      } else {
-        q = query(collection(db, EXAMS_COLLECTION));
+      if (!teacherId) {
+        const q = query(collection(db, EXAMS_COLLECTION));
+        const querySnapshot = await getDocs(q);
+        const exams: Assignment[] = [];
+        querySnapshot.forEach((docSnap) => {
+          exams.push(normalizeAssignmentDoc(docSnap.data(), docSnap.id));
+        });
+        return exams;
       }
 
+      // Query lọc theo teacherId của giáo viên (Đảm bảo giáo viên A không nhìn thấy đề giáo viên B)
+      const q = query(
+        collection(db, EXAMS_COLLECTION),
+        where('teacherId', '==', teacherId)
+      );
       const querySnapshot = await getDocs(q);
-      const exams: Assignment[] = [];
+      const map = new Map<string, Assignment>();
       querySnapshot.forEach((docSnap) => {
-        exams.push({
-          ...(docSnap.data() as Assignment),
-          id: docSnap.id
-        });
+        map.set(docSnap.id, normalizeAssignmentDoc(docSnap.data(), docSnap.id));
       });
-      return exams;
+
+      // Nếu có email giáo viên, query thêm theo teacherEmail để không bị sót đề cũ tạo trước đó
+      if (teacherEmail) {
+        try {
+          const qEmail = query(
+            collection(db, EXAMS_COLLECTION),
+            where('teacherEmail', '==', teacherEmail)
+          );
+          const emailSnap = await getDocs(qEmail);
+          emailSnap.forEach((docSnap) => {
+            if (!map.has(docSnap.id)) {
+              map.set(docSnap.id, normalizeAssignmentDoc(docSnap.data(), docSnap.id));
+            }
+          });
+        } catch (emailErr) {
+          console.warn('[Firestore] Query teacherEmail fallback non-fatal:', emailErr);
+        }
+      }
+
+      return Array.from(map.values());
     } catch (error) {
       console.error('[Firestore Error] Lỗi tải danh sách đề thi:', error);
       return [];
@@ -183,6 +254,27 @@ export class FirestoreService {
       return results;
     } catch (error) {
       console.error('[Firestore Error] Lỗi tải danh sách kết quả bài thi:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Lấy toàn bộ kết quả bài nộp từ Firestore (Dùng cho Giáo viên đồng bộ giữa các máy)
+   */
+  static async getAllResults(): Promise<Submission[]> {
+    try {
+      const q = query(collection(db, RESULTS_COLLECTION));
+      const querySnapshot = await getDocs(q);
+      const results: Submission[] = [];
+      querySnapshot.forEach((docSnap) => {
+        results.push({
+          ...(docSnap.data() as Submission),
+          id: docSnap.id
+        });
+      });
+      return results;
+    } catch (error) {
+      console.error('[Firestore Error] Lỗi tải tất cả kết quả từ Firestore:', error);
       return [];
     }
   }
@@ -225,6 +317,21 @@ export class FirestoreService {
         }
       }
 
+      // Ghi nhận khóa đã xóa vào hồ sơ giáo viên để đồng bộ xóa sang các máy tính khác
+      if (auth.currentUser?.uid) {
+        try {
+          const profile = await FirestoreService.getTeacherProfile(auth.currentUser.uid);
+          const currentDeleted = profile?.deletedAssignmentKeys || [];
+          const keysToAdd = [assignmentId, assignmentCode].filter(Boolean) as string[];
+          const updatedDeleted = Array.from(new Set([...currentDeleted, ...keysToAdd]));
+          await FirestoreService.saveTeacherProfile(auth.currentUser.uid, {
+            deletedAssignmentKeys: updatedDeleted
+          });
+        } catch (e) {
+          console.warn('[Firestore] Không thể lưu danh sách đề đã xóa vào hồ sơ giáo viên:', e);
+        }
+      }
+
       console.log(`[Firestore] Đã xóa đề thi ${assignmentId} (${assignmentCode || ''}) trên Cloud Firestore.`);
     } catch (error) {
       console.error('[Firestore Error] Lỗi xóa đề thi trên Firestore:', error);
@@ -257,7 +364,7 @@ export class FirestoreService {
         payload.teacherName = teacherUser.displayName || 'Giáo viên';
       }
 
-      await setDoc(templateDocRef, payload, { merge: true });
+      await setDoc(templateDocRef, sanitizeForFirestore(payload), { merge: true });
       console.log(`[Firestore] Đã lưu đề mẫu ${template.id} (${template.title}) vào Kho Đề.`);
     } catch (error) {
       console.error('[Firestore Error] Không thể lưu đề mẫu vào Kho Đề:', error);
@@ -334,7 +441,7 @@ export class FirestoreService {
         payload.teacherName = teacherUser.displayName || 'Giáo viên';
       }
 
-      await setDoc(contestDocRef, payload, { merge: true });
+      await setDoc(contestDocRef, sanitizeForFirestore(payload), { merge: true });
       console.log(`[Firestore] Đã lưu cuộc thi ${contest.id} (${contest.code}) lên Cloud Firestore.`);
     } catch (error) {
       console.error('[Firestore Error] Không thể lưu cuộc thi lên Firestore:', error);
@@ -450,10 +557,11 @@ export class FirestoreService {
   static async saveContestSubmission(submission: ContestSubmission): Promise<void> {
     try {
       const submissionDocRef = doc(db, CONTEST_SUBMISSIONS_COLLECTION, submission.id);
-      await setDoc(submissionDocRef, {
+      const payload = {
         ...submission,
         createdAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      await setDoc(submissionDocRef, sanitizeForFirestore(payload), { merge: true });
       console.log(`[Firestore] Đã lưu bài nộp cuộc thi của học sinh ${submission.studentName} (${submission.totalScore}đ).`);
     } catch (error) {
       console.error('[Firestore Error] Không thể lưu bài nộp cuộc thi:', error);
@@ -491,10 +599,11 @@ export class FirestoreService {
   static async updateContestSubmission(submissionId: string, updates: Partial<ContestSubmission>): Promise<void> {
     try {
       const docRef = doc(db, CONTEST_SUBMISSIONS_COLLECTION, submissionId);
-      await setDoc(docRef, {
+      const payload = {
         ...updates,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
     } catch (error) {
       console.error('[Firestore Error] Lỗi cập nhật bài nộp cuộc thi:', error);
       throw error;
@@ -508,12 +617,13 @@ export class FirestoreService {
     try {
       const draftKey = `${contestId}_${encodeURIComponent(studentName.trim())}`;
       const docRef = doc(db, CONTEST_DRAFTS_COLLECTION, draftKey);
-      await setDoc(docRef, {
+      const payload = {
         contestId,
         studentName,
         ...draftData,
         lastSavedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
     } catch (error) {
       console.warn('[Firestore] Lỗi lưu nháp cuộc thi (non-fatal):', error);
     }
@@ -552,16 +662,20 @@ export class FirestoreService {
       hasClearedDemoData: boolean; 
       deletedAssignmentKeys: string[];
       classes: ClassRoom[];
+      cloudInitialized: boolean;
+      hasMigratedInitialData: boolean;
       updatedAt: string;
+      [key: string]: any;
     }>
   ): Promise<void> {
     if (!teacherId) return;
     try {
       const teacherDocRef = doc(db, TEACHERS_COLLECTION, teacherId);
-      await setDoc(teacherDocRef, {
+      const payload = {
         ...data,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      await setDoc(teacherDocRef, sanitizeForFirestore(payload), { merge: true });
       console.log(`[Firestore] Đã lưu thông tin giáo viên ${teacherId} lên Cloud Firestore.`);
     } catch (error) {
       console.warn('[Firestore Error] Không thể lưu thông tin giáo viên:', error);
@@ -577,6 +691,8 @@ export class FirestoreService {
     hasClearedDemoData?: boolean;
     deletedAssignmentKeys?: string[];
     classes?: ClassRoom[];
+    cloudInitialized?: boolean;
+    hasMigratedInitialData?: boolean;
     [key: string]: any;
   } | null> {
     if (!teacherId) return null;
@@ -584,12 +700,35 @@ export class FirestoreService {
       const teacherDocRef = doc(db, TEACHERS_COLLECTION, teacherId);
       const snap = await getDoc(teacherDocRef);
       if (snap.exists()) {
-        return snap.data() as any;
+        const data = snap.data() || {};
+        return {
+          ...data,
+          classes: Array.isArray(data.classes) ? data.classes : [],
+          deletedAssignmentKeys: Array.isArray(data.deletedAssignmentKeys) ? data.deletedAssignmentKeys : [],
+          cloudInitialized: Boolean(data.cloudInitialized)
+        };
       }
       return null;
     } catch (error) {
       console.warn('[Firestore Error] Lỗi đọc thông tin giáo viên:', error);
       return null;
+    }
+  }
+
+  /**
+   * Lấy danh sách Lớp học của Giáo viên từ Cloud Firestore (luôn trả về mảng)
+   */
+  static async getTeacherClasses(teacherId: string): Promise<ClassRoom[]> {
+    if (!teacherId) return [];
+    try {
+      const profile = await this.getTeacherProfile(teacherId);
+      if (profile && Array.isArray(profile.classes)) {
+        return profile.classes;
+      }
+      return [];
+    } catch (error) {
+      console.warn('[Firestore Error] Lỗi đọc lớp học giáo viên:', error);
+      return [];
     }
   }
 
@@ -600,11 +739,14 @@ export class FirestoreService {
     if (!teacherId) return;
     try {
       const teacherDocRef = doc(db, TEACHERS_COLLECTION, teacherId);
-      await setDoc(teacherDocRef, {
-        classes: classes || [],
-        classesUpdatedAt: new Date().toISOString()
-      }, { merge: true });
-      console.log(`[Firestore] Đã đồng bộ ${classes.length} lớp học của giáo viên ${teacherId} lên Cloud.`);
+      const safeClasses = Array.isArray(classes) ? classes : [];
+      const payload = {
+        classes: safeClasses,
+        classesUpdatedAt: new Date().toISOString(),
+        cloudInitialized: true
+      };
+      await setDoc(teacherDocRef, sanitizeForFirestore(payload), { merge: true });
+      console.log(`[Firestore] Đã đồng bộ ${safeClasses.length} lớp học của giáo viên ${teacherId} lên Cloud.`);
     } catch (error) {
       console.warn('[Firestore Error] Lỗi đồng bộ lớp học lên Firestore:', error);
     }

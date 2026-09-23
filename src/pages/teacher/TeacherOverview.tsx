@@ -24,16 +24,20 @@ interface TeacherOverviewProps {
 }
 
 export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
-  classes,
-  assignments,
-  submissions,
+  classes = [],
+  assignments = [],
+  submissions = [],
   onNavigate,
   onOpenShare
 }) => {
-  const totalStudents = classes.reduce((acc, c) => acc + (c.students?.length || 0), 0);
-  const totalAssignments = assignments.length;
-  const activeAssignments = assignments.filter(a => a.isPublished).length;
-  const totalSubmissions = submissions.length;
+  const safeClasses = Array.isArray(classes) ? classes.filter((c): c is ClassRoom => Boolean(c && typeof c === 'object')) : [];
+  const safeAssignments = Array.isArray(assignments) ? assignments.filter((a): a is Assignment => Boolean(a && typeof a === 'object')) : [];
+  const safeSubmissions = Array.isArray(submissions) ? submissions.filter((s): s is Submission => Boolean(s && typeof s === 'object')) : [];
+
+  const totalStudents = safeClasses.reduce((acc, c) => acc + (Array.isArray(c?.students) ? c.students.length : 0), 0);
+  const totalAssignments = safeAssignments.length;
+  const activeAssignments = safeAssignments.filter(a => Boolean(a && a.isPublished)).length;
+  const totalSubmissions = safeSubmissions.length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -107,7 +111,7 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
               <Users className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900">{classes.length}</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900">{safeClasses.length}</div>
           <span className="text-xs text-slate-400 mt-1 block">Lớp đang quản lý</span>
         </div>
 
@@ -169,7 +173,7 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
             onClick={() => onNavigate('assignments')}
             className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-800"
           >
-            <span>Xem tất cả ({assignments.length})</span>
+            <span>Xem tất cả ({safeAssignments.length})</span>
             <ArrowRight className="w-3.5 h-3.5 ml-1" />
           </button>
         </div>
@@ -187,65 +191,76 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {assignments.map((asg) => {
-                const asgSubmissions = submissions.filter(s => s.assignmentId === asg.id);
-                const targetClass = classes.find(c => c.id === asg.classId);
-                const studentCount = targetClass ? (targetClass.students?.length || 0) : 10;
+              {safeAssignments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-slate-500 font-medium">
+                    <p className="text-sm">Chưa có bài tập nào.</p>
+                    <p className="text-xs text-slate-400 mt-1">Thầy Cô có thể bấm "Tạo bài tập mới" hoặc giao bài nhanh từ "Kho đề mẫu".</p>
+                  </td>
+                </tr>
+              ) : (
+                safeAssignments.slice(0, 10).map((asg) => {
+                  if (!asg) return null;
+                  const asgSubmissions = safeSubmissions.filter(s => s && s.assignmentId === asg.id);
+                  const targetClass = safeClasses.find(c => c && c.id === asg.classId);
+                  const studentCount = targetClass && Array.isArray(targetClass.students) ? targetClass.students.length : 10;
+                  const questionCount = Array.isArray(asg.questions) ? asg.questions.length : 0;
 
-                return (
-                  <tr key={asg.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900">{asg.title}</div>
-                      <div className="text-xs text-slate-500">{asg.topic} • Lớp {asg.grade}</div>
-                    </td>
-                    <td className="py-3.5 px-3">
-                      <span className="inline-block bg-blue-100 text-blue-800 font-bold text-xs px-2.5 py-0.5 rounded-md">
-                        {asg.className ? `Lớp ${asg.className}` : 'Tất cả học sinh'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-3 text-center font-semibold text-slate-700">
-                      {asg.questions.length}
-                    </td>
-                    <td className="py-3.5 px-3">
-                      <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-xs">
-                        {asg.assignmentCode}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-3 text-center">
-                      <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs border border-emerald-200">
-                        {asgSubmissions.length} / {studentCount}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-1.5">
-                        <button
-                          onClick={() => onNavigate('create', { editingAssignment: asg })}
-                          title="Sửa đề bài & câu hỏi"
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs rounded-lg transition-colors border border-amber-200 cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Sửa câu hỏi</span>
-                        </button>
-                        <button
-                          onClick={() => onOpenShare(asg)}
-                          title="Lấy mã QR & Link"
-                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => onNavigate('results', { assignmentId: asg.id })}
-                          title="Xem kết quả & Thống kê"
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                        >
-                          <BarChart3 className="w-3.5 h-3.5" />
-                          <span>Kết quả</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={asg.id || Math.random().toString()} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-900">{asg.title || 'Bài tập'}</div>
+                        <div className="text-xs text-slate-500">{asg.topic || 'Toán học'} • Lớp {asg.grade || '6'}</div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <span className="inline-block bg-blue-100 text-blue-800 font-bold text-xs px-2.5 py-0.5 rounded-md">
+                          {asg.className ? `Lớp ${asg.className}` : 'Tất cả học sinh'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3 text-center font-semibold text-slate-700">
+                        {questionCount}
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-xs">
+                          {asg.assignmentCode || asg.id || '---'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3 text-center">
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs border border-emerald-200">
+                          {asgSubmissions.length} / {studentCount}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end space-x-1.5">
+                          <button
+                            onClick={() => onNavigate('create', { editingAssignment: asg })}
+                            title="Sửa đề bài & câu hỏi"
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs rounded-lg transition-colors border border-amber-200 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Sửa câu hỏi</span>
+                          </button>
+                          <button
+                            onClick={() => onOpenShare(asg)}
+                            title="Lấy mã QR & Link"
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onNavigate('results', { assignmentId: asg.id })}
+                            title="Xem kết quả & Thống kê"
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                          >
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            <span>Kết quả</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

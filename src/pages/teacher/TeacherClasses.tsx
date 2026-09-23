@@ -29,9 +29,11 @@ interface TeacherClassesProps {
   onNavigate?: (tab: string, params?: any) => void;
 }
 
-export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignments = [], onRefresh, onNavigate }) => {
+export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes = [], assignments = [], onRefresh, onNavigate }) => {
+  const safeClasses = Array.isArray(classes) ? classes.filter((c): c is ClassRoom => Boolean(c && typeof c === 'object')) : [];
+  const safeAssignments = Array.isArray(assignments) ? assignments.filter((a): a is Assignment => Boolean(a && typeof a === 'object')) : [];
   const { user } = useAuth();
-  const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
+  const [selectedClassId, setSelectedClassId] = useState<string>(safeClasses[0]?.id || '');
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [showImportExcelModal, setShowImportExcelModal] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -60,9 +62,9 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
   const [searchKeyword, setSearchKeyword] = useState('');
   const [classSubTab, setClassSubTab] = useState<'students' | 'assignments'>('students');
 
-  const currentClass = classes.find(c => c.id === selectedClassId) || classes[0];
+  const currentClass = safeClasses.find(c => c.id === selectedClassId) || safeClasses[0];
 
-  const classAssignments = assignments.filter(a => 
+  const classAssignments = safeAssignments.filter(a => 
     currentClass && (
       a.classId === currentClass.id || 
       a.classId === currentClass.name || 
@@ -226,15 +228,15 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ classes, assignm
         {/* Left column: Classes List */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
           <div className="text-xs font-bold uppercase text-slate-400 px-2 mb-2">
-            Danh sách lớp ({classes.length})
+            Danh sách lớp ({safeClasses.length})
           </div>
 
-          {classes.length === 0 ? (
+          {safeClasses.length === 0 ? (
             <div className="text-center py-8 px-2 text-xs text-slate-400">
               Chưa có lớp học nào. Bấm nút <strong>"+ Thêm lớp học mới"</strong> ở trên để tạo lớp.
             </div>
           ) : (
-            classes.map((cls) => {
+            safeClasses.map((cls) => {
               const isSelected = cls.id === currentClass?.id;
               return (
                 <div

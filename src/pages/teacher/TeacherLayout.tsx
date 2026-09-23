@@ -41,15 +41,19 @@ interface TeacherLayoutProps {
 }
 
 export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
-  classes,
-  assignments,
-  submissions,
+  classes = [],
+  assignments = [],
+  submissions = [],
   onRefreshData,
   onOpenShare,
   onTestAssignment,
   onResetData,
   onClearDemoData
 }) => {
+  const safeClasses = Array.isArray(classes) ? classes.filter((c): c is ClassRoom => Boolean(c && typeof c === 'object')) : [];
+  const safeAssignments = Array.isArray(assignments) ? assignments.filter((a): a is Assignment => Boolean(a && typeof a === 'object')) : [];
+  const safeSubmissions = Array.isArray(submissions) ? submissions.filter((s): s is Submission => Boolean(s && typeof s === 'object')) : [];
+
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [tabParams, setTabParams] = useState<any>({});
@@ -85,8 +89,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
     { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
     { id: 'exam_bank', label: 'Kho đề mẫu', icon: Layers, highlight: true }, // MỚI: Thêm tab Kho đề mẫu lên menu ngang
     { id: 'contests', label: 'Thi trực tuyến', icon: Trophy, contestHighlight: true }, // MỚI: Thêm tab Thi trực tuyến
-    { id: 'classes', label: 'Lớp học', icon: Users, badge: classes.length },
-    { id: 'assignments', label: 'Bài tập', icon: BookOpen, badge: assignments.length },
+    { id: 'classes', label: 'Lớp học', icon: Users, badge: safeClasses.length },
+    { id: 'assignments', label: 'Bài tập', icon: BookOpen, badge: safeAssignments.length },
     { id: 'create', label: 'Tạo bài mới', icon: PlusCircle },
     { id: 'results', label: 'Kết quả & Thống kê', icon: BarChart3 },
     { id: 'settings', label: 'Cài đặt', icon: Settings }
@@ -209,9 +213,9 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {activeTab === 'overview' && (
           <TeacherOverview
-            classes={classes}
-            assignments={assignments}
-            submissions={submissions}
+            classes={safeClasses}
+            assignments={safeAssignments}
+            submissions={safeSubmissions}
             onNavigate={handleNavigate}
             onOpenShare={onOpenShare}
           />
@@ -220,7 +224,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         {/* MỚI: Định tuyến hiển thị màn hình Kho đề mẫu */}
         {activeTab === 'exam_bank' && (
           <ExamBankView
-            classes={classes}
+            classes={safeClasses}
             onNavigate={handleNavigate}
           />
         )}
@@ -228,7 +232,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
         {/* MỚI: Định tuyến hiển thị Hệ thống Thi trực tuyến */}
         {activeTab === 'contests' && (
           <TeacherContests
-            classes={classes}
+            classes={safeClasses}
             onNavigate={handleNavigate}
           />
         )}
@@ -252,8 +256,8 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
 
         {activeTab === 'classes' && (
           <TeacherClasses
-            classes={classes}
-            assignments={assignments}
+            classes={safeClasses}
+            assignments={safeAssignments}
             onRefresh={onRefreshData}
             onNavigate={handleNavigate}
           />
@@ -261,9 +265,9 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
 
         {activeTab === 'assignments' && (
           <TeacherAssignments
-            assignments={assignments}
-            classes={classes}
-            submissions={submissions}
+            assignments={safeAssignments}
+            classes={safeClasses}
+            submissions={safeSubmissions}
             initialFilterClass={tabParams.filterClass}
             onRefresh={onRefreshData}
             onNavigate={handleNavigate}
@@ -274,7 +278,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
 
         {activeTab === 'create' && (
           <TeacherCreateAssignment
-            classes={classes}
+            classes={safeClasses}
             editingAssignment={tabParams.editingAssignment}
             initialQuestions={tabParams.initialQuestions}
             initialTitle={tabParams.initialTitle}
@@ -291,9 +295,9 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
 
         {activeTab === 'results' && (
           <TeacherResults
-            assignments={assignments}
-            classes={classes}
-            submissions={submissions}
+            assignments={safeAssignments}
+            classes={safeClasses}
+            submissions={safeSubmissions}
             initialAssignmentId={tabParams.assignmentId}
             onOpenShare={onOpenShare}
           />

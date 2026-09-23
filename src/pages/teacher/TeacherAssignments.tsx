@@ -44,15 +44,19 @@ interface TeacherAssignmentsProps {
 }
 
 export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
-  assignments,
-  classes,
-  submissions,
+  assignments = [],
+  classes = [],
+  submissions = [],
   initialFilterClass,
   onRefresh,
   onNavigate,
   onOpenShare,
   onTestAssignment
 }) => {
+  const safeAssignments = useMemo(() => Array.isArray(assignments) ? assignments.filter((a): a is Assignment => Boolean(a && typeof a === 'object')) : [], [assignments]);
+  const safeClasses = useMemo(() => Array.isArray(classes) ? classes.filter((c): c is ClassRoom => Boolean(c && typeof c === 'object')) : [], [classes]);
+  const safeSubmissions = useMemo(() => Array.isArray(submissions) ? submissions.filter((s): s is Submission => Boolean(s && typeof s === 'object')) : [], [submissions]);
+
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterTopicCategory, setFilterTopicCategory] = useState<string>('all');
   const [filterClass, setFilterClass] = useState<string>(initialFilterClass || 'all');
@@ -130,13 +134,13 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   // Extract distinct topics dynamically
   const uniqueTopics = useMemo(() => {
     const topicsSet = new Set<string>();
-    assignments.forEach(a => {
+    safeAssignments.forEach(a => {
       if (a.topic && a.topic.trim()) {
         topicsSet.add(a.topic.trim());
       }
     });
     return Array.from(topicsSet);
-  }, [assignments]);
+  }, [safeAssignments]);
 
   // Topic classification helper
   const matchesTopicCategory = (topic: string, category: string): boolean => {
@@ -173,13 +177,13 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   };
 
   const filteredAssignments = useMemo(() => {
-    return assignments
+    return safeAssignments
       .filter(a => {
         if (filterGrade !== 'all' && a.grade !== filterGrade) return false;
         if (filterClass !== 'all') {
           // Lớp cụ thể: khớp chính xác ID lớp, hoặc tên lớp (vd: '6A1'), hoặc bài tập giao cho toàn khối / 'all'
           const isDirectClass = a.classId === filterClass;
-          const targetCls = classes.find(c => c.id === filterClass);
+          const targetCls = safeClasses.find(c => c.id === filterClass);
           const isNameMatch = targetCls && (a.className === targetCls.name || a.classId === targetCls.name);
           const isAllClass = a.classId === 'all' || !a.classId || a.className === 'Toàn khối';
           if (!isDirectClass && !isNameMatch && !isAllClass) return false;
@@ -187,24 +191,24 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
         if (filterTopicCategory !== 'all' && !matchesTopicCategory(a.topic, filterTopicCategory)) return false;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
-          const matchTitle = a.title.toLowerCase().includes(q);
-          const matchTopic = a.topic.toLowerCase().includes(q);
-          const matchCode = a.assignmentCode.toLowerCase().includes(q);
-          const matchGrade = `khối ${a.grade}`.includes(q) || `lớp ${a.grade}`.includes(q);
+          const matchTitle = (a.title || '').toLowerCase().includes(q);
+          const matchTopic = (a.topic || '').toLowerCase().includes(q);
+          const matchCode = (a.assignmentCode || a.id || '').toLowerCase().includes(q);
+          const matchGrade = `khối ${a.grade || ''}`.includes(q) || `lớp ${a.grade || ''}`.includes(q);
           const matchClassName = (a.className || '').toLowerCase().includes(q);
           if (!matchTitle && !matchTopic && !matchCode && !matchGrade && !matchClassName) return false;
         }
         return true;
       })
       .sort((a, b) => {
-        if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        if (sortBy === 'title') return a.title.localeCompare(b.title, 'vi');
-        if (sortBy === 'questions') return b.questions.length - a.questions.length;
+        if (sortBy === 'newest') return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        if (sortBy === 'oldest') return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+        if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '', 'vi');
+        if (sortBy === 'questions') return (Array.isArray(b.questions) ? b.questions.length : 0) - (Array.isArray(a.questions) ? a.questions.length : 0);
         if (sortBy === 'duration') return (b.durationMinutes || 0) - (a.durationMinutes || 0);
         return 0;
       });
-  }, [assignments, filterGrade, filterClass, filterTopicCategory, searchQuery, sortBy]);
+  }, [safeAssignments, safeClasses, filterGrade, filterClass, filterTopicCategory, searchQuery, sortBy]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -304,7 +308,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
               className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">🏫 Tất cả lớp học</option>
-              {classes.map(cls => (
+              {safeClasses.map(cls => (
                 <option key={cls.id} value={cls.id}>Lớp {cls.name}</option>
               ))}
             </select>
@@ -420,8 +424,8 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredAssignments.map((asg) => {
-            const asgSubs = submissions.filter(s => s.assignmentId === asg.id);
-            const targetClass = classes.find(c => c.id === asg.classId);
+            const asgSubs = safeSubmissions.filter(s => s.assignmentId === asg.id);
+            const targetClass = safeClasses.find(c => c.id === asg.classId);
             const classStudentCount = targetClass ? (targetClass.students?.length || 0) : 10;
 
             // Determine topic badge color
@@ -535,7 +539,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                   <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex items-center space-x-1">
                       <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{asg.questions.length} câu</span>
+                      <span>{Array.isArray(asg.questions) ? asg.questions.length : 0} câu</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />

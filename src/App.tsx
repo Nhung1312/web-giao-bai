@@ -93,49 +93,76 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Tự động đồng bộ hồ sơ Giáo viên (lớp học, cờ đã xóa dữ liệu mẫu) khi đăng nhập tài khoản
+  // Tự động đồng bộ hồ sơ Giáo viên khi đăng nhập tài khoản
   useEffect(() => {
     if (!user?.uid) return;
 
     const syncTeacherCloudData = async () => {
       try {
         const profile = await FirestoreService.getTeacherProfile(user.uid);
-        if (profile) {
-          // 1. Đồng bộ cờ đã xóa dữ liệu mẫu
+        
+        // 1. Nếu trên Cloud Firestore đã có dữ liệu hoặc đã được khởi tạo
+        if (profile && (profile.cloudInitialized || profile.hasMigratedInitialData || (Array.isArray(profile.classes) && profile.classes.length > 0))) {
+          // FIRESTORE LÀ NGUỒN CHÂN LÝ: Cloud -> LocalStorage & State
           if (profile.hasClearedDemoData) {
             StorageService.setClearedDemoData(true);
-            if (Array.isArray(profile.deletedAssignmentKeys)) {
-              profile.deletedAssignmentKeys.forEach(k => StorageService.markAssignmentAsDeleted(k, k));
+          }
+          if (Array.isArray(profile.deletedAssignmentKeys)) {
+            profile.deletedAssignmentKeys.forEach(k => StorageService.markAssignmentAsDeleted(k, k));
+          }
+
+          const cloudClasses = Array.isArray(profile.classes) ? profile.classes : [];
+          StorageService.setClasses(cloudClasses);
+          setClasses(cloudClasses);
+
+          // Đảm bảo cờ cloudInitialized đã được lưu trên Firestore
+          if (!profile.cloudInitialized) {
+            await FirestoreService.saveTeacherClasses(user.uid, cloudClasses);
+          }
+        } else {
+          // 2. TÀI KHOẢN MỚI TRÊN CLOUD: Thực hiện migrate dữ liệu local hợp lệ lên Cloud MỘT LẦN DUY NHẤT
+          const isCleared = StorageService.hasClearedDemoData();
+          const localClasses = StorageService.getClasses();
+          const localAssignments = StorageService.getAssignments();
+          const deletedKeys = Array.from(StorageService.getDeletedAssignmentKeys());
+
+          const isSample = (a: Assignment) => {
+            if (!a) return false;
+            if (a.id.startsWith('asg_toan6_') || a.id.startsWith('asg_toan7_') || a.id.startsWith('asg_toan8_') || a.id.startsWith('asg_toan9_')) return true;
+            const c = (a.assignmentCode || '').toUpperCase().trim();
+            if (['TOAN6A1-8K4P', 'TOAN6-HINH1', 'TOAN7-DECUONG', 'TOAN7-TAMGIAC', 'TOAN8-HANGDANGTHUC', 'TOAN8-TUGIAC', 'TOAN9-CANTHUC', 'TOAN9-DUONGTRON'].includes(c)) return true;
+            if (c.includes('EUJ9') || c.includes('Y973') || c.includes('K74Z') || c.includes('FLMH')) return true;
+            return false;
+          };
+
+          for (const asg of localAssignments) {
+            if (!isSample(asg) && !deletedKeys.includes(asg.id)) {
+              try {
+                await FirestoreService.saveExam(asg, {
+                  uid: user.uid,
+                  email: user.email || '',
+                  displayName: user.displayName || 'Giáo viên'
+                });
+              } catch (e) {
+                console.warn('Lỗi migrate đề local sang Firestore:', e);
+              }
             }
           }
 
-          // 2. Đồng bộ danh sách Lớp học của Giáo viên
-          if (Array.isArray(profile.classes) && profile.classes.length > 0) {
-            localStorage.setItem('toan_thcs_classes_v4', JSON.stringify(profile.classes));
-            setClasses(profile.classes);
-          } else if (profile.hasClearedDemoData && (!profile.classes || profile.classes.length === 0)) {
-            localStorage.setItem('toan_thcs_classes_v4', JSON.stringify([]));
-            setClasses([]);
-          } else {
-            // Nếu trên Cloud chưa có lớp nhưng máy có lớp do giáo viên tạo -> Đẩy lên Cloud
-            const localCls = StorageService.getClasses();
-            if (localCls.length > 0) {
-              await FirestoreService.saveTeacherClasses(user.uid, localCls);
-            }
-          }
-        } else {
-          // Nếu trên Cloud chưa có hồ sơ giáo viên, lưu cấu hình hiện tại lên Cloud
-          const isCleared = StorageService.hasClearedDemoData();
-          const currentClasses = StorageService.getClasses();
-          const deletedKeys = Array.from(StorageService.getDeletedAssignmentKeys());
           await FirestoreService.saveTeacherProfile(user.uid, {
             email: user.email || '',
             displayName: user.displayName || 'Giáo viên',
             hasClearedDemoData: isCleared,
             deletedAssignmentKeys: deletedKeys,
-            classes: currentClasses
+            classes: Array.isArray(localClasses) ? localClasses : [],
+            cloudInitialized: true,
+            hasMigratedInitialData: true,
+            updatedAt: new Date().toISOString()
           });
+          setClasses(Array.isArray(localClasses) ? localClasses : []);
         }
+
+        // Tải toàn bộ bài tập và kết quả bài làm mới nhất từ Firestore
         await refreshAllData();
       } catch (err) {
         console.warn('Lỗi khi đồng bộ dữ liệu giáo viên từ Cloud:', err);
@@ -158,52 +185,96 @@ function AppContent() {
       return false;
     };
 
-    // 1. Instant local read (lọc bỏ các đề đã bị xóa hoặc đề mẫu nếu đã xóa mẫu)
-    const localClasses = StorageService.getClasses();
-    const localAssignments = StorageService.getAssignments().filter(a => {
+    // 1. Nếu chưa đăng nhập (khách vãng lai / học sinh): Chỉ đọc từ local
+    if (!user?.uid) {
+      const localClasses = StorageService.getClasses();
+      const localAssignments = StorageService.getAssignments().filter(a => {
+        const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
+        if (deletedKeys.has(a.id) || deletedKeys.has(codeKey)) return false;
+        if (isCleared && isSample(a)) return false;
+        return true;
+      });
+      const localSubmissions = StorageService.getSubmissions();
+
+      setClasses(Array.isArray(localClasses) ? localClasses : []);
+      setAssignments(Array.isArray(localAssignments) ? localAssignments : []);
+      setSubmissions(Array.isArray(localSubmissions) ? localSubmissions : []);
+      return;
+    }
+
+    // 2. KHI GIÁO VIÊN ĐÃ ĐĂNG NHẬP:
+    // 2a. Đọc nhanh từ cache hiện tại để UI hiển thị tức thì không bị giật
+    const cachedClasses = StorageService.getClasses();
+    const cachedAssignments = StorageService.getAssignments().filter(a => {
       const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
       if (deletedKeys.has(a.id) || deletedKeys.has(codeKey)) return false;
       if (isCleared && isSample(a)) return false;
       return true;
     });
-    const localSubmissions = StorageService.getSubmissions();
+    const cachedSubmissions = StorageService.getSubmissions();
 
-    setClasses(localClasses);
-    setAssignments(localAssignments);
-    setSubmissions(localSubmissions);
+    setClasses(Array.isArray(cachedClasses) ? cachedClasses : []);
+    setAssignments(Array.isArray(cachedAssignments) ? cachedAssignments : []);
+    setSubmissions(Array.isArray(cachedSubmissions) ? cachedSubmissions : []);
 
-    // 2. Fetch latest from Cloud Firestore
+    // 2b. FIRESTORE LÀ NGUỒN CHÂN LÝ DUY NHẤT (Single Source of Truth)
     try {
-      const cloudExams = await FirestoreService.getExams();
-      if (cloudExams && cloudExams.length > 0) {
-        const map = new Map<string, Assignment>();
-        
-        // Thêm các đề local hợp lệ trước
-        localAssignments.forEach(a => {
-          const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
-          if (!deletedKeys.has(a.id) && !deletedKeys.has(codeKey)) {
-            if (!isCleared || !isSample(a)) {
-              map.set(codeKey, a);
-            }
-          }
-        });
-
-        // Thêm các đề Cloud Firestore chưa bị người dùng xóa
-        for (const a of cloudExams) {
-          const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
-          if (deletedKeys.has(a.id) || deletedKeys.has(codeKey) || (isCleared && isSample(a))) {
-            // Đề này đã bị người dùng xóa trước đó hoặc là đề mẫu -> Dọn dẹp ngầm trên Firestore luôn
-            FirestoreService.deleteExam(a.id, a.assignmentCode).catch(() => {});
-            continue;
-          }
-          map.set(codeKey, a);
+      // (i) Đồng bộ danh sách Lớp học và cấu hình từ Profile Giáo viên trên Cloud
+      const profile = await FirestoreService.getTeacherProfile(user.uid);
+      if (profile) {
+        if (profile.hasClearedDemoData) {
+          StorageService.setClearedDemoData(true);
         }
-
-        const merged = Array.from(map.values());
-        setAssignments(merged);
+        if (Array.isArray(profile.deletedAssignmentKeys)) {
+          profile.deletedAssignmentKeys.forEach(k => StorageService.markAssignmentAsDeleted(k, k));
+        }
+        if (Array.isArray(profile.classes)) {
+          StorageService.setClasses(profile.classes);
+          setClasses(profile.classes);
+        }
       }
+
+      const activeDeletedKeys = StorageService.getDeletedAssignmentKeys();
+      const activeIsCleared = StorageService.hasClearedDemoData();
+
+      // (ii) Tải danh sách đề thi chính thức của đúng giáo viên từ Firestore
+      const cloudExams = await FirestoreService.getExams(user.uid, user.email);
+      const validCloudExams = (Array.isArray(cloudExams) ? cloudExams : []).filter(a => {
+        if (!a) return false;
+        const codeKey = (a.assignmentCode || a.id).replace(/\s+/g, '').toUpperCase();
+        if (activeDeletedKeys.has(a.id) || activeDeletedKeys.has(codeKey)) return false;
+        if (activeIsCleared && isSample(a)) return false;
+        return true;
+      });
+
+      // TUYỆT ĐỐI KHÔNG MERGE LOCALSTORAGE VÀO FIRESTORE!
+      // Firestore là nguồn chính: Ghi đè vào Cache và State
+      StorageService.setAssignments(validCloudExams);
+      setAssignments(validCloudExams);
+
+      // (iii) Tải kết quả bài nộp của học sinh từ Firestore thuộc về các đề của giáo viên này
+      const allCloudResults = await FirestoreService.getAllResults();
+      const teacherExamKeys = new Set<string>();
+      validCloudExams.forEach(a => {
+        if (a.id) teacherExamKeys.add(a.id);
+        if (a.assignmentCode) {
+          teacherExamKeys.add(a.assignmentCode.toUpperCase().trim());
+          teacherExamKeys.add(a.assignmentCode.replace(/\s+/g, '').toUpperCase());
+        }
+      });
+
+      const teacherCloudSubmissions = (Array.isArray(allCloudResults) ? allCloudResults : []).filter(s => {
+        if (!s || !s.assignmentId) return false;
+        const rawId = s.assignmentId.trim();
+        const cleanId = rawId.replace(/\s+/g, '').toUpperCase();
+        return teacherExamKeys.has(rawId) || teacherExamKeys.has(cleanId);
+      });
+
+      // TUYỆT ĐỐI KHÔNG MERGE SUBMISSION CŨ TỪ LOCALSTORAGE!
+      StorageService.setSubmissions(teacherCloudSubmissions);
+      setSubmissions(teacherCloudSubmissions);
     } catch (e) {
-      console.warn('Syncing exams from Firestore:', e);
+      console.warn('Lỗi đồng bộ dữ liệu từ Firestore:', e);
     }
   };
 
@@ -393,9 +464,9 @@ function AppContent() {
             element={
               <PrivateRoute>
                 <TeacherLayout
-                  classes={classes}
-                  assignments={assignments}
-                  submissions={submissions}
+                  classes={Array.isArray(classes) ? classes : []}
+                  assignments={Array.isArray(assignments) ? assignments : []}
+                  submissions={Array.isArray(submissions) ? submissions : []}
                   onRefreshData={refreshAllData}
                   onOpenShare={(asg) => setShareAssignment(asg)}
                   onTestAssignment={handleTestAssignmentFromTeacher}

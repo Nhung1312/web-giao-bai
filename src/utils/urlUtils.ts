@@ -7,6 +7,11 @@
  * - ais-pre-*.run.app: Đường dẫn Shared công khai (bất kỳ học sinh nào cũng truy cập được trực tiếp mà KHÔNG bị Google chặn đăng nhập).
  */
 
+export function getCurrentOrigin(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.origin;
+}
+
 export function getPublicOrigin(): string {
   if (typeof window === 'undefined') return '';
   let origin = window.location.origin;
@@ -21,11 +26,20 @@ export function getPublicOrigin(): string {
 }
 
 /**
- * Tạo link làm bài tập thường cho học sinh
+ * Tạo link làm bài tập công khai cho học sinh (không chặn đăng nhập)
  * Định dạng: https://domain/join?code=TOAN6A1-XXXX
  */
 export function getAssignmentShareLink(assignmentCode: string): string {
   const origin = getPublicOrigin();
+  const cleanCode = (assignmentCode || '').trim().toUpperCase();
+  return `${origin}/join?code=${encodeURIComponent(cleanCode)}`;
+}
+
+/**
+ * Tạo link làm bài tập trực tiếp trên domain hiện tại
+ */
+export function getAssignmentDirectLink(assignmentCode: string): string {
+  const origin = getCurrentOrigin();
   const cleanCode = (assignmentCode || '').trim().toUpperCase();
   return `${origin}/join?code=${encodeURIComponent(cleanCode)}`;
 }
@@ -36,6 +50,15 @@ export function getAssignmentShareLink(assignmentCode: string): string {
  */
 export function getContestShareLink(contestCode: string): string {
   const origin = getPublicOrigin();
+  const cleanCode = (contestCode || '').trim().toUpperCase();
+  return `${origin}/contest/${encodeURIComponent(cleanCode)}`;
+}
+
+/**
+ * Tạo link cuộc thi trực tiếp trên domain hiện tại
+ */
+export function getContestDirectLink(contestCode: string): string {
+  const origin = getCurrentOrigin();
   const cleanCode = (contestCode || '').trim().toUpperCase();
   return `${origin}/contest/${encodeURIComponent(cleanCode)}`;
 }

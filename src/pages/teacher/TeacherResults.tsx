@@ -50,14 +50,18 @@ interface TeacherResultsProps {
 }
 
 export const TeacherResults: React.FC<TeacherResultsProps> = ({
-  assignments,
-  classes,
-  submissions,
+  assignments = [],
+  classes = [],
+  submissions = [],
   initialAssignmentId,
   onOpenShare
 }) => {
+  const safeAssignments = useMemo(() => Array.isArray(assignments) ? assignments.filter((a): a is Assignment => Boolean(a && typeof a === 'object')) : [], [assignments]);
+  const safeClasses = useMemo(() => Array.isArray(classes) ? classes.filter((c): c is ClassRoom => Boolean(c && typeof c === 'object')) : [], [classes]);
+  const safeSubmissions = useMemo(() => Array.isArray(submissions) ? submissions.filter((s): s is Submission => Boolean(s && typeof s === 'object')) : [], [submissions]);
+
   const [selectedAsgId, setSelectedAsgId] = useState<string>(
-    initialAssignmentId || assignments[0]?.id || ''
+    initialAssignmentId || safeAssignments[0]?.id || ''
   );
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'competency' | 'analysis' | 'submissions' | 'unsubmitted'>('leaderboard');
   const [sortBy, setSortBy] = useState<'name' | 'score' | 'time' | 'submittedAt'>('score');
@@ -82,14 +86,14 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
   const [savedGradeSuccess, setSavedGradeSuccess] = useState<Record<string, boolean>>({});
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
-  const currentAssignment = assignments.find(a => a.id === selectedAsgId) || assignments[0];
-  const targetClass = currentAssignment ? classes.find(c => c.id === currentAssignment.classId) : null;
+  const currentAssignment = safeAssignments.find(a => a.id === selectedAsgId) || safeAssignments[0];
+  const targetClass = currentAssignment ? safeClasses.find(c => c.id === currentAssignment.classId) : null;
   const classStudents = targetClass?.students || [];
 
   // Filter submissions for current assignment
   const currentSubmissions = useMemo(() => {
-    return submissions.filter(s => s.assignmentId === currentAssignment?.id);
-  }, [submissions, currentAssignment]);
+    return safeSubmissions.filter(s => s.assignmentId === currentAssignment?.id);
+  }, [safeSubmissions, currentAssignment]);
 
   // Compute full stats
   const stats = useMemo(() => {
@@ -103,7 +107,7 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
 
   // Find unsubmitted students
   const unsubmittedStudents = useMemo(() => {
-    if (!targetClass) return [];
+    if (!targetClass || !Array.isArray(targetClass.students)) return [];
     const submittedStudentNames = new Set(currentSubmissions.map(s => s.studentName.toLowerCase().trim()));
     return targetClass.students.filter(
       st => !submittedStudentNames.has(st.name.toLowerCase().trim())
@@ -264,7 +268,7 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
     let correctCnt = 0;
     let wrongCnt = 0;
     updatedAnswers.forEach(a => {
-      const q = currentAssignment.questions.find(item => item.id === a.questionId);
+      const q = Array.isArray(currentAssignment?.questions) ? currentAssignment.questions.find(item => item && item.id === a.questionId) : undefined;
       const max = q ? q.points : (a.maxPoints || 1);
       totalMax += max;
       totalEarned += (a.teacherScore !== undefined ? a.teacherScore : a.pointsEarned);
@@ -324,6 +328,18 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
     );
   }
 
+  if (safeAssignments.length === 0 || !currentAssignment) {
+    return (
+      <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-200 shadow-xs space-y-4">
+        <BarChart3 className="w-12 h-12 text-slate-300 mx-auto" />
+        <h3 className="font-bold text-slate-700 text-lg">Chưa có bài tập nào</h3>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          Thầy Cô hãy tạo bài tập mới hoặc giao đề mẫu cho học sinh để xem bảng xếp hạng và phân tích kết quả tại đây.
+        </p>
+      </div>
+    );
+  }
+
   const top1 = leaderboardList[0];
   const top2 = leaderboardList[1];
   const top3 = leaderboardList[2];
@@ -354,7 +370,7 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
               }}
               className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-sm text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500"
             >
-              {assignments.map((asg) => (
+              {safeAssignments.map((asg) => (
                 <option key={asg.id} value={asg.id}>
                   {asg.title} ({asg.className ? `Lớp ${asg.className}` : `Lớp ${asg.grade}`}) - Mã: {asg.assignmentCode}
                 </option>

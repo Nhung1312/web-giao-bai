@@ -12,16 +12,16 @@ service cloud.firestore {
     // - Giáo viên đã đăng nhập được phép tạo, sửa, xuất bản đề thi
     match /exams/{examId} {
       allow read: if true;
-      allow create, update: if request.auth != null || true; // Cho phép giáo viên lưu đề
-      allow delete: if request.auth != null;
+      allow create, update: if true;
+      allow delete: if true;
     }
 
     // 2. BỘ SƯU TẬP KHO ĐỀ MẪU (exam_templates)
     // - Giáo viên lưu trữ và tái sử dụng các đề thi mẫu trắc nghiệm & PDF
     match /exam_templates/{templateId} {
       allow read: if true;
-      allow create, update: if request.auth != null || true;
-      allow delete: if request.auth != null;
+      allow create, update: if true;
+      allow delete: if true;
     }
 
     // 3. BỘ SƯU TẬP KẾT QUẢ NỘP BÀI CỦA HỌC SINH (results)
@@ -32,7 +32,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if true;
       allow update: if true;
-      allow delete: if request.auth != null;
+      allow delete: if true;
     }
 
     // 4. BỘ SƯU TẬP LỚP HỌC & DANH SÁCH HỌC SINH (classes)
