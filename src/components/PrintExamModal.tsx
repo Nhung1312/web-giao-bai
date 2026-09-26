@@ -241,6 +241,15 @@ export const PrintExamModal: React.FC<PrintExamModalProps> = ({
                           </span>
                           <div className="flex-1 font-medium">
                             <MathDisplay text={q.question} />
+                            {q.imageUrl && (
+                              <div className="my-2 flex justify-center">
+                                <img 
+                                  src={q.imageUrl} 
+                                  alt={`Hình vẽ câu ${idx + 1}`} 
+                                  className="max-h-48 max-w-sm object-contain border border-slate-300 rounded-sm"
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -387,6 +396,15 @@ export const PrintExamModal: React.FC<PrintExamModalProps> = ({
                       </span>
                       <div className="flex-1 font-medium">
                         <MathDisplay text={q.question} />
+                        {q.imageUrl && (
+                          <div className="my-2 flex justify-center">
+                            <img 
+                              src={q.imageUrl} 
+                              alt={`Hình vẽ câu ${idx + 1}`} 
+                              className="max-h-40 max-w-xs object-contain border border-slate-300 rounded-sm"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 

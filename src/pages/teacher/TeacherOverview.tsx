@@ -12,7 +12,8 @@ import {
   ArrowRight,
   Sparkles,
   Layers,
-  Edit3
+  Edit3,
+  Settings
 } from 'lucide-react';
 
 interface TeacherOverviewProps {
@@ -97,6 +98,15 @@ export const TeacherOverview: React.FC<TeacherOverviewProps> = ({
             >
               <Users className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span>Quản lý lớp học</span>
+            </button>
+
+            {/* Quick Settings & Backup Button */}
+            <button
+              onClick={() => onNavigate('settings')}
+              className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold px-4 sm:px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs transition-all active:scale-95 text-xs sm:text-sm cursor-pointer"
+            >
+              <Settings className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>⚙️ Cài đặt & Sao lưu</span>
             </button>
           </div>
         </div>

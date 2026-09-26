@@ -222,6 +222,11 @@ export const ContestResultPage: React.FC = () => {
 
                     <div className="text-slate-900 dark:text-white font-medium">
                       <MathDisplay content={q.question} />
+                      {q.imageUrl && (
+                        <div className="my-2 flex justify-center">
+                          <img src={q.imageUrl} alt="Hình vẽ câu hỏi" className="max-h-56 max-w-full object-contain rounded-xl border border-slate-200 dark:border-slate-700" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Câu trả lời của em */}

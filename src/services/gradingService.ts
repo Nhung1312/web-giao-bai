@@ -4,10 +4,115 @@
  * Hỗ trợ cả câu trắc nghiệm, trả lời ngắn và câu tự luận có đính kèm ảnh bài làm học sinh.
  */
 
-import { Assignment, Submission, StudentAnswer, AssignmentStats, QuestionAnalysis, ViolationEvent, Contest, ContestSubmission } from '../types';
+import { Assignment, Submission, StudentAnswer, AssignmentStats, QuestionAnalysis, ViolationEvent, Contest, ContestSubmission, Question } from '../types';
 import { isEssayQuestion } from '../utils/questionUtils';
 
 export class GradingService {
+  /**
+   * Kiểm tra tính đúng/sai của câu trắc nghiệm với cơ chế so khớp đa tầng thông minh
+   * Đảm bảo không bị lệch do chữ hoa/thường, khoảng trắng, dấu chấm, đảo đề hoặc lưu text thay vì nhãn.
+   */
+  static evaluateMultipleChoiceAnswer(
+    q: Question,
+    selected: string
+  ): { isCorrect: boolean; isUnanswered: boolean; selectedOptionText?: string; originalSelectedLabel?: string } {
+    const rawSelected = (selected || '').trim();
+    if (!rawSelected) {
+      return { isCorrect: false, isUnanswered: true };
+    }
+
+    const cleanSelected = rawSelected.toUpperCase();
+    const cleanCorrect = (q.correctAnswer || '').trim().toUpperCase();
+
+    // 1. Tìm option mà học sinh đã chọn trong danh sách câu hỏi
+    const matchedOption = q.options?.find(opt => {
+      const optId = (opt.id || '').trim().toUpperCase();
+      const optOriginalId = ((opt as any).originalId || '').trim().toUpperCase();
+      const optText = (opt.text || '').trim().toUpperCase();
+      return optId === cleanSelected || optOriginalId === cleanSelected || (optText && optText === cleanSelected);
+    });
+
+    const selectedOptionText = matchedOption ? matchedOption.text : undefined;
+    const originalSelectedLabel = (matchedOption as any)?.originalId || matchedOption?.id || rawSelected;
+
+    // 2. So khớp trực tiếp mã đáp án (vd: 'A' === 'A')
+    if (cleanSelected === cleanCorrect) {
+      return { isCorrect: true, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+    }
+
+    // 3. Chuẩn hóa bỏ dấu chấm, ngoặc, khoảng trắng (vd: "A." so với "A")
+    const strippedSelected = cleanSelected.replace(/[^A-Z0-9]/g, '');
+    const strippedCorrect = cleanCorrect.replace(/[^A-Z0-9]/g, '');
+    if (strippedSelected && strippedSelected === strippedCorrect) {
+      return { isCorrect: true, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+    }
+
+    // 4. Nếu q.correctAnswer là nhãn đề gốc (originalId), hoặc là text của phương án đúng
+    if (matchedOption) {
+      const optOriginalId = ((matchedOption as any).originalId || '').trim().toUpperCase();
+      if (optOriginalId && optOriginalId === cleanCorrect) {
+        return { isCorrect: true, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+      }
+
+      const optText = (matchedOption.text || '').trim().toUpperCase();
+      if (optText && optText === cleanCorrect) {
+        return { isCorrect: true, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+      }
+    }
+
+    // 5. Kiểm tra nếu q.correctAnswer thực chất trỏ tới phương án mà học sinh vừa chọn
+    const correctOption = q.options?.find(opt => {
+      const optId = (opt.id || '').trim().toUpperCase();
+      const optOriginalId = ((opt as any).originalId || '').trim().toUpperCase();
+      const optText = (opt.text || '').trim().toUpperCase();
+      return optId === cleanCorrect || optOriginalId === cleanCorrect || (optText && optText === cleanCorrect);
+    });
+
+    if (matchedOption && correctOption && matchedOption === correctOption) {
+      return { isCorrect: true, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+    }
+
+    // 6. Nếu cả 2 đều có nội dung text trùng nhau (không rỗng)
+    if (
+      matchedOption &&
+      correctOption &&
+      matchedOption.text.trim() &&
+      matchedOption.text.trim().toLowerCase() === correctOption.text.trim().toLowerCase()
+    ) {
+      return { isCorrect: true, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+    }
+
+    return { isCorrect: false, isUnanswered: false, selectedOptionText, originalSelectedLabel };
+  }
+
+  /**
+   * Đánh giá câu trả lời ngắn / điền số với hỗ trợ dấu phẩy thập phân
+   */
+  static evaluateShortAnswer(
+    q: Question,
+    selected: string
+  ): { isCorrect: boolean; isUnanswered: boolean } {
+    const rawSelected = (selected || '').trim();
+    if (!rawSelected) {
+      return { isCorrect: false, isUnanswered: true };
+    }
+
+    const cleanSelected = rawSelected.replace(/\s+/g, '').toLowerCase();
+    const cleanCorrect = (q.correctAnswer || '').replace(/\s+/g, '').toLowerCase();
+
+    if (cleanSelected === cleanCorrect) {
+      return { isCorrect: true, isUnanswered: false };
+    }
+
+    const numSelected = Number(cleanSelected.replace(',', '.'));
+    const numCorrect = Number(cleanCorrect.replace(',', '.'));
+    if (!isNaN(numSelected) && !isNaN(numCorrect) && Math.abs(numSelected - numCorrect) < 0.0001) {
+      return { isCorrect: true, isUnanswered: false };
+    }
+
+    return { isCorrect: false, isUnanswered: false };
+  }
+
   /**
    * Tự động chấm bài nộp Cuộc thi (Contest)
    */
@@ -66,6 +171,9 @@ export class GradingService {
       let pointsEarned = 0;
       let isUnanswered = false;
 
+      let selectedOptionText: string | undefined = undefined;
+      let originalSelectedLabel: string | undefined = undefined;
+
       if (isEssay) {
         hasEssay = true;
         if (aiEval && typeof aiEval.score === 'number') {
@@ -78,17 +186,18 @@ export class GradingService {
           isCorrect = false;
         }
       } else if (q.type === 'short_answer') {
-        isUnanswered = selected === '';
-        // So sánh chuỗi không dấu / khoảng trắng
-        const cleanSelected = selected.replace(/\s+/g, '').toLowerCase();
-        const cleanCorrect = (q.correctAnswer || '').replace(/\s+/g, '').toLowerCase();
-        isCorrect = !isUnanswered && cleanSelected === cleanCorrect;
+        const evalRes = GradingService.evaluateShortAnswer(q, selected);
+        isUnanswered = evalRes.isUnanswered;
+        isCorrect = evalRes.isCorrect;
         pointsEarned = isCorrect ? questionPoints : 0;
         earnedMcqPoints += pointsEarned;
       } else {
         // Multiple choice & True / False
-        isUnanswered = selected === '';
-        isCorrect = !isUnanswered && selected.toUpperCase() === (q.correctAnswer || '').toUpperCase();
+        const evalRes = GradingService.evaluateMultipleChoiceAnswer(q, selected);
+        isUnanswered = evalRes.isUnanswered;
+        isCorrect = evalRes.isCorrect;
+        selectedOptionText = evalRes.selectedOptionText;
+        originalSelectedLabel = evalRes.originalSelectedLabel;
         pointsEarned = isCorrect ? questionPoints : 0;
         earnedMcqPoints += pointsEarned;
       }
@@ -107,6 +216,8 @@ export class GradingService {
       return {
         questionId: q.id,
         selectedAnswer: selected,
+        selectedOptionText,
+        originalSelectedLabel,
         studentSolutionText: solutionText,
         essayImages: images,
         isCorrect,
@@ -210,6 +321,9 @@ export class GradingService {
       let pointsEarned = 0;
       let isUnanswered = false;
 
+      let selectedOptionText: string | undefined = undefined;
+      let originalSelectedLabel: string | undefined = undefined;
+
       if (isEssay) {
         // Với câu tự luận: nếu đã có điểm AI chấm
         if (aiEval && typeof aiEval.score === 'number') {
@@ -224,10 +338,18 @@ export class GradingService {
           pointsEarned = 0;
           isCorrect = false;
         }
+      } else if (q.type === 'short_answer') {
+        const evalRes = GradingService.evaluateShortAnswer(q, selected);
+        isUnanswered = evalRes.isUnanswered;
+        isCorrect = evalRes.isCorrect;
+        pointsEarned = isCorrect ? q.points : 0;
       } else {
-        // Trắc nghiệm
-        isUnanswered = selected === '';
-        isCorrect = !isUnanswered && selected.toUpperCase() === (q.correctAnswer || '').toUpperCase();
+        // Trắc nghiệm & Đúng/Sai
+        const evalRes = GradingService.evaluateMultipleChoiceAnswer(q, selected);
+        isUnanswered = evalRes.isUnanswered;
+        isCorrect = evalRes.isCorrect;
+        selectedOptionText = evalRes.selectedOptionText;
+        originalSelectedLabel = evalRes.originalSelectedLabel;
         pointsEarned = isCorrect ? q.points : 0;
       }
 
@@ -245,6 +367,8 @@ export class GradingService {
       return {
         questionId: q.id,
         selectedAnswer: selected,
+        selectedOptionText,
+        originalSelectedLabel,
         studentSolutionText: solutionText,
         essayImages: images,
         isCorrect,
@@ -285,7 +409,8 @@ export class GradingService {
       essayImages: generalEssayImages,
       tabSwitchCount,
       violationEvents,
-      isShuffled
+      isShuffled,
+      shuffledQuestions: assignment.questions
     };
   }
 

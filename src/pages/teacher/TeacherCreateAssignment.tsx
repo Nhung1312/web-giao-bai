@@ -7,6 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { aiService } from '../../services/aiService';
 import { FileUploadModal } from '../../components/FileUploadModal';
 import { MathDisplay } from '../../components/MathDisplay';
+import { QuestionImageUpload } from '../../components/QuestionImageUpload';
+import { processQuestionImage } from '../../utils/imageProcessUtils';
 import { isEssayQuestion, normalizeQuestion } from '../../utils/questionUtils';
 import { SubscriptionService, BILLING_ENABLED } from '../../services/subscriptionService';
 import { 
@@ -753,16 +755,56 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
                       rows={2}
                       value={q.question}
                       onChange={(e) => handleUpdateQuestion(qIdx, { question: e.target.value })}
+                      onPaste={async (e) => {
+                        const items = e.clipboardData?.items;
+                        if (items) {
+                          for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.indexOf('image') !== -1) {
+                              e.preventDefault();
+                              const file = items[i].getAsFile();
+                              if (file) {
+                                try {
+                                  const compressed = await processQuestionImage(file);
+                                  handleUpdateQuestion(qIdx, { imageUrl: compressed });
+                                } catch (err) {
+                                  console.error('Lỗi dán ảnh:', err);
+                                }
+                              }
+                              break;
+                            }
+                          }
+                        }
+                      }}
                       placeholder={isEssayQuestion(q) ? "Nhập đề bài tự luận Toán (ví dụ: a) Rút gọn biểu thức A; b) Tìm x để A > 0...)" : "Nhập đề bài Toán..."}
                       className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500"
                       required
                     />
-                    {q.question.trim() && (
+
+                    {/* Vùng tải & dán ảnh minh họa câu hỏi */}
+                    <QuestionImageUpload
+                      imageUrl={q.imageUrl}
+                      questionOrder={q.order || (qIdx + 1)}
+                      onImageChange={(newUrl) => handleUpdateQuestion(qIdx, { imageUrl: newUrl })}
+                    />
+
+                    {(q.question.trim() || q.imageUrl) && (
                       <div className="mt-2 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-sm">
                         <div className="text-[10px] uppercase font-black tracking-wider text-indigo-700 mb-1">
                           Xem trước hiển thị:
                         </div>
-                        <MathDisplay text={q.question} />
+                        {q.question.trim() && <MathDisplay text={q.question} />}
+                        {q.imageUrl && (
+                          <div className="mt-2 pt-2 border-t border-indigo-100/60 flex flex-col items-center">
+                            <img
+                              src={q.imageUrl}
+                              alt="Xem trước hình minh họa"
+                              className="max-h-48 max-w-full object-contain rounded-lg border border-indigo-200/80 shadow-2xs"
+                            />
+                            <span className="text-[10px] text-slate-500 mt-1 italic">
+                              (Hình vẽ minh họa câu hỏi)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

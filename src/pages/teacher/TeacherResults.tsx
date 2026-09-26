@@ -38,7 +38,8 @@ import {
   Edit3,
   Save,
   Check,
-  Brain
+  Brain,
+  ZoomIn
 } from 'lucide-react';
 
 interface TeacherResultsProps {
@@ -85,6 +86,11 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
   const [teacherFeedbackInput, setTeacherFeedbackInput] = useState<Record<string, string>>({});
   const [savedGradeSuccess, setSavedGradeSuccess] = useState<Record<string, boolean>>({});
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+
+  // Batch AI Essay Grading
+  const [isBatchGrading, setIsBatchGrading] = useState<boolean>(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; studentName: string } | null>(null);
+  const [batchResultMsg, setBatchResultMsg] = useState<string | null>(null);
 
   const currentAssignment = safeAssignments.find(a => a.id === selectedAsgId) || safeAssignments[0];
   const targetClass = currentAssignment ? safeClasses.find(c => c.id === currentAssignment.classId) : null;
@@ -182,6 +188,10 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
   // On-demand AI Essay Grading for a single question
   const handleAiGradeSingleQuestion = async (ans: StudentAnswer, question: any) => {
     if (!selectedSubmissionDetail || !currentAssignment) return;
+    if (!aiService.hasApiKey()) {
+      alert('Bạn chưa cài đặt Google Gemini API Key. Vui lòng vào Cài đặt để nhập API Key từ Google AI Studio.');
+      return;
+    }
     setGradingAiInProgress(prev => ({ ...prev, [ans.questionId]: true }));
     try {
       const res = await aiService.gradeEssay({
@@ -201,6 +211,8 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
           return {
             ...a,
             pointsEarned: res.score,
+            teacherScore: res.score,
+            teacherFeedback: `[Gemini AI]: ${res.feedback}`,
             isCorrect,
             aiScore: res.score,
             aiFeedback: res.feedback,
@@ -236,10 +248,126 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
       setSelectedSubmissionDetail(updatedSubmission);
       StorageService.saveSubmission(updatedSubmission);
       FirestoreService.saveResult(updatedSubmission).catch(() => {});
-    } catch (e) {
-      alert('Lỗi chấm bài bằng AI.');
+      alert(`AI đã chấm xong: ${res.score}/${question.points} điểm.`);
+    } catch (e: any) {
+      alert('Lỗi chấm bài bằng AI: ' + (e?.message || String(e)));
     } finally {
       setGradingAiInProgress(prev => ({ ...prev, [ans.questionId]: false }));
+    }
+  };
+
+  // Chấm hàng loạt bài tự luận của bài tập bằng Gemini AI
+  const handleBatchAiGradeAssignment = async () => {
+    if (!currentAssignment) return;
+    if (!aiService.hasApiKey()) {
+      alert('Bạn chưa cài đặt Google Gemini API Key. Vui lòng vào Cài đặt để nhập API Key từ Google AI Studio.');
+      return;
+    }
+
+    const essayQuestions = currentAssignment.questions.filter(q => isEssayQuestion(q));
+    if (essayQuestions.length === 0) {
+      alert('Bài tập này không có câu hỏi tự luận.');
+      return;
+    }
+
+    if (currentSubmissions.length === 0) {
+      alert('Chưa có học sinh nào nộp bài tập này.');
+      return;
+    }
+
+    const confirmAction = window.confirm(
+      `Hệ thống sẽ dùng Gemini AI để tự động phân tích và chấm điểm toàn bộ bài tự luận cho ${currentSubmissions.length} bài nộp của lớp.\n\nThầy/Cô có muốn bắt đầu không?`
+    );
+    if (!confirmAction) return;
+
+    setIsBatchGrading(true);
+    setBatchResultMsg(null);
+    let successCount = 0;
+
+    try {
+      for (let i = 0; i < currentSubmissions.length; i++) {
+        const sub = currentSubmissions[i];
+        setBatchProgress({
+          current: i + 1,
+          total: currentSubmissions.length,
+          studentName: sub.studentName
+        });
+
+        const updatedAnswers = [...sub.answers];
+        let totalEarned = 0;
+        let totalMax = 0;
+        let correctCnt = 0;
+        let wrongCnt = 0;
+
+        for (let qIdx = 0; qIdx < currentAssignment.questions.length; qIdx++) {
+          const q = currentAssignment.questions[qIdx];
+          const isEssay = isEssayQuestion(q);
+          const ansIndex = updatedAnswers.findIndex(a => a.questionId === q.id);
+          const ans = ansIndex >= 0 ? updatedAnswers[ansIndex] : null;
+
+          if (isEssay && ans) {
+            try {
+              const res = await aiService.gradeEssay({
+                questionText: q.question,
+                studentAnswerText: ans.studentSolutionText || '',
+                essayImages: ans.essayImages || [],
+                maxPoints: q.points,
+                correctAnswerCriteria: q.correctAnswer,
+                rubric: q.rubric,
+                grade: currentAssignment.grade,
+                topicHint: q.topicHint
+              });
+
+              const isCorrect = res.score >= (q.points * 0.5);
+              updatedAnswers[ansIndex] = {
+                ...ans,
+                pointsEarned: res.score,
+                teacherScore: res.score,
+                teacherFeedback: `[Gemini AI]: ${res.feedback}`,
+                isCorrect,
+                aiScore: res.score,
+                aiFeedback: res.feedback,
+                aiGraded: true
+              };
+
+              totalEarned += res.score;
+              if (isCorrect) correctCnt++; else wrongCnt++;
+            } catch (err) {
+              console.warn(`Lỗi chấm AI câu ${q.id} cho ${sub.studentName}:`, err);
+              const pts = ans.teacherScore ?? ans.pointsEarned ?? 0;
+              totalEarned += pts;
+              if (ans.isCorrect) correctCnt++; else wrongCnt++;
+            }
+          } else if (ans) {
+            const pts = ans.teacherScore ?? ans.pointsEarned ?? 0;
+            totalEarned += pts;
+            if (ans.isCorrect) correctCnt++; else wrongCnt++;
+          }
+          totalMax += (q.points || 1);
+        }
+
+        const rawScore = totalMax > 0 ? (totalEarned / totalMax) * 10 : 0;
+        const totalScore = Math.round(rawScore * 10) / 10;
+
+        const updatedSub: Submission = {
+          ...sub,
+          answers: updatedAnswers,
+          totalScore,
+          correctCount: correctCnt,
+          wrongCount: wrongCnt
+        };
+
+        StorageService.saveSubmission(updatedSub);
+        await FirestoreService.saveResult(updatedSub).catch(() => {});
+        successCount++;
+      }
+
+      setBatchResultMsg(`✅ Hoàn thành! Đã dùng Gemini AI chấm điểm tự luận cho ${successCount} bài nộp của lớp.`);
+    } catch (batchErr: any) {
+      alert('Quá trình chấm hàng loạt gặp sự cố: ' + (batchErr?.message || String(batchErr)));
+    } finally {
+      setIsBatchGrading(false);
+      setBatchProgress(null);
     }
   };
 
@@ -444,6 +572,58 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
           <span className="text-[11px] text-slate-500">Cần phụ đạo</span>
         </div>
       </div>
+
+      {/* BATCH AI ESSAY GRADING BANNER */}
+      {currentAssignment.questions.some(q => isEssayQuestion(q)) && (
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50 to-pink-50 border-2 border-purple-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200 shrink-0">
+              <Sparkles className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                <h3 className="font-black text-slate-900 text-sm">
+                  Trợ lý Gemini AI Chấm Điểm Tự Luận Lớp Học
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[11px] font-black">
+                  Đã nộp: {currentSubmissions.length} bài
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                AI tự động đọc ảnh chụp bài giải viết tay, phân tích các bước biến đổi toán học và tính điểm chuẩn barem.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              onClick={handleBatchAiGradeAssignment}
+              disabled={isBatchGrading || currentSubmissions.length === 0}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs shadow-md shadow-purple-500/20 flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>
+                {isBatchGrading
+                  ? 'Đang chấm điểm...'
+                  : `AI Chấm Toàn Bộ Tự Luận (${currentSubmissions.length} bài)`}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Thông báo kết quả chấm hàng loạt */}
+      {batchResultMsg && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center justify-between">
+          <span>{batchResultMsg}</span>
+          <button
+            onClick={() => setBatchResultMsg(null)}
+            className="text-emerald-700 hover:underline cursor-pointer ml-3"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
 
       {/* Tabs Navigation & Action Bar */}
       <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1312,11 +1492,38 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
                       <MathDisplay text={question.question} />
                     </div>
 
+                    {/* Question Illustration Image */}
+                    {question.imageUrl && (
+                      <div className="mb-3 p-2 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center">
+                        <div 
+                          className="relative group cursor-pointer overflow-hidden rounded-lg"
+                          onClick={() => setLightboxImageUrl(question.imageUrl!)}
+                          title="Bấm để xem hình vẽ phóng to"
+                        >
+                          <img 
+                            src={question.imageUrl} 
+                            alt={`Hình vẽ câu ${question.order}`}
+                            className="max-h-56 max-w-full object-contain rounded-lg shadow-2xs transition-transform duration-200 group-hover:scale-[1.02]"
+                          />
+                          <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg pointer-events-none">
+                            <span className="px-2.5 py-1 bg-black/80 text-white text-[11px] font-semibold rounded-full flex items-center gap-1 backdrop-blur-xs">
+                              <ZoomIn className="w-3 h-3" />
+                              <span>Phóng to</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Multiple choice response */}
                     {!isEssay && (
-                      <div className="text-xs text-slate-600 flex items-center gap-4 bg-white/70 p-2.5 rounded-xl border border-slate-100 mb-2">
+                      <div className="text-xs text-slate-600 flex flex-wrap items-center gap-4 bg-white/70 p-2.5 rounded-xl border border-slate-100 mb-2">
                         <span>
                           Học sinh chọn: <strong className="text-indigo-700">{ans.selectedAnswer || '(Bỏ trống)'}</strong>
+                          {ans.selectedOptionText && <span className="text-slate-500 ml-1">({ans.selectedOptionText})</span>}
+                          {ans.originalSelectedLabel && ans.originalSelectedLabel !== ans.selectedAnswer && (
+                            <span className="text-[11px] text-indigo-500 ml-1 font-normal">(Đề gốc: {ans.originalSelectedLabel})</span>
+                          )}
                         </span>
                         <span>
                           Đáp án đúng: <strong className="text-emerald-700">{question.correctAnswer}</strong>
@@ -1434,6 +1641,43 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TIẾN TRÌNH CHẤM BÀI HÀNG LOẠT BẰNG AI */}
+      {isBatchGrading && batchProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-5 text-center">
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-indigo-300 animate-bounce">
+              <Sparkles className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-black text-slate-900">
+                Gemini AI Đang Chấm Bài Tự Luận
+              </h3>
+              <p className="text-xs text-slate-500">
+                Đang phân tích bài làm của học sinh: <strong className="text-indigo-600">{batchProgress.studentName}</strong>
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1.5 text-left">
+              <div className="flex justify-between text-xs font-bold text-slate-700">
+                <span>Tiến trình hoàn thành:</span>
+                <span>{batchProgress.current} / {batchProgress.total} bài</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200">
+                <div
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-full rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${Math.round((batchProgress.current / batchProgress.total) * 100)}%` }}
+                />
+              </div>
+              <div className="text-[11px] text-slate-400 text-center pt-1 font-medium">
+                Vui lòng không đóng trình duyệt trong khi AI đang xử lý...
+              </div>
             </div>
           </div>
         </div>

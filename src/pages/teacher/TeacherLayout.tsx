@@ -93,7 +93,7 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
     { id: 'classes', label: 'Lớp học', icon: Users, badge: safeClasses.length },
     { id: 'assignments', label: 'Bài tập', icon: BookOpen, badge: safeAssignments.length },
     { id: 'create', label: 'Tạo bài mới', icon: PlusCircle },
-    { id: 'results', label: 'Kết quả & Thống kê', icon: BarChart3 },
+    { id: 'results', label: 'Kết quả', icon: BarChart3 },
     { id: 'settings', label: 'Cài đặt', icon: Settings }
   ];
 
@@ -141,8 +141,23 @@ export const TeacherLayout: React.FC<TeacherLayoutProps> = ({
               })}
             </div>
 
-            {/* Teacher Subscription Pill / Upgrade Trigger */}
-            <div className="pl-2 shrink-0">
+            {/* Right Controls: Always-Visible Settings & Subscription Badge */}
+            <div className="flex items-center space-x-2 pl-2 shrink-0 border-l border-slate-200 dark:border-slate-800">
+              {/* Pinned Settings Button */}
+              <button
+                type="button"
+                onClick={() => handleNavigate('settings')}
+                title="Cài đặt hệ thống, Gemini AI & Sao lưu dữ liệu"
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                  activeTab === 'settings'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <Settings className={`w-3.5 h-3.5 ${activeTab === 'settings' ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`} />
+                <span>Cài đặt</span>
+              </button>
+
               {!BILLING_ENABLED ? (
                 /* Chế độ Trải nghiệm Miễn phí toàn hệ thống: Hiển thị badge thân thiện */
                 <button

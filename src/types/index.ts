@@ -39,6 +39,7 @@ export interface Question {
   explanation?: string; // Lời giải chi tiết
   topicHint?: string; // e.g. "Quy đồng mẫu số", "Rút gọn phân số"
   rubric?: string; // Hướng dẫn / tiêu chí chấm tự luận cho AI và Giáo viên
+  imageUrl?: string; // MỚI: Hình vẽ minh họa / đồ thị hình học cho đề bài (tải file hoặc dán Ctrl+V)
 }
 
 // ==========================================
@@ -86,6 +87,8 @@ export interface ViolationEvent {
 export interface StudentAnswer {
   questionId: string;
   selectedAnswer: string; // 'A', 'B', 'C', 'D' or text / student typed notes
+  selectedOptionText?: string; // Nội dung văn bản của phương án học sinh đã chọn
+  originalSelectedLabel?: string; // Nhãn phương án tương ứng trên đề gốc (trước khi đảo đề)
   isCorrect: boolean;
   pointsEarned: number;
   maxPoints: number;
@@ -131,6 +134,7 @@ export interface Submission {
   tabSwitchCount?: number;
   violationEvents?: ViolationEvent[];
   isShuffled?: boolean;
+  shuffledQuestions?: Question[]; // Snapshot danh sách câu hỏi học sinh nhìn thấy khi làm bài
 }
 
 export interface QuestionAnalysis {

@@ -30,8 +30,11 @@ import {
   Eye,
   Award,
   Check,
-  X
+  X,
+  ZoomIn,
+  FileSpreadsheet
 } from 'lucide-react';
+import { ExamResultSheetView } from '../../components/ExamResultSheetView';
 
 interface StudentResultPageProps {
   submission: Submission;
@@ -46,6 +49,7 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
   onRetake,
   onGoHome
 }) => {
+  const [resultViewMode, setResultViewMode] = useState<'sheet' | 'detailed'>('sheet');
   const [filterType, setFilterType] = useState<'all' | 'wrong' | 'correct'>('all');
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   
@@ -361,59 +365,101 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
           </div>
         </div>
 
-        {/* DETAILED ANSWER REVIEW */}
+        {/* DETAILED ANSWER REVIEW & RESULT SHEET */}
         {assignment.allowViewResult ? (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-indigo-600" />
-                  <span>Xem lại bài làm & Lời giải chi tiết</span>
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Kiểm tra đối chiếu đáp án, bài làm tự luận và hướng dẫn giải từng bước.
-                </p>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="flex bg-slate-100 p-1.5 rounded-xl shrink-0 gap-1">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                    filterType === 'all'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Tất cả ({submission.answers.length})
-                </button>
-                <button
-                  onClick={() => setFilterType('wrong')}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                    filterType === 'wrong'
-                      ? 'bg-white text-rose-700 shadow-xs'
-                      : 'text-slate-600 hover:text-rose-700'
-                  }`}
-                >
-                  🔴 Câu sai ({submission.wrongCount})
-                </button>
-                <button
-                  onClick={() => setFilterType('correct')}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                    filterType === 'correct'
-                      ? 'bg-white text-emerald-700 shadow-xs'
-                      : 'text-slate-600 hover:text-emerald-700'
-                  }`}
-                >
-                  🟢 Câu đúng ({submission.correctCount})
-                </button>
-              </div>
+            {/* VIEW MODE TABS: PHIẾU KẾT QUẢ THI VS CHI TIẾT TỪNG CÂU */}
+            <div className="flex bg-slate-200/80 p-1.5 rounded-2xl max-w-md mx-auto shadow-inner border border-slate-300 gap-1.5 print:hidden">
+              <button
+                onClick={() => setResultViewMode('sheet')}
+                className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  resultViewMode === 'sheet'
+                    ? 'bg-white text-indigo-700 shadow-md scale-[1.02]'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                <span>Phiếu kết quả thi</span>
+              </button>
+              <button
+                onClick={() => setResultViewMode('detailed')}
+                className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  resultViewMode === 'detailed'
+                    ? 'bg-white text-indigo-700 shadow-md scale-[1.02]'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 text-indigo-600" />
+                <span>Xem chi tiết câu hỏi</span>
+              </button>
             </div>
 
-            {/* List of Questions with Full Explanations */}
-            <div className="space-y-4">
+            {/* 1. OFFICIAL EXAM RESULT SHEET VIEW */}
+            {resultViewMode === 'sheet' && (
+              <ExamResultSheetView
+                submission={submission}
+                assignment={assignment}
+                onBackToDetailedView={() => setResultViewMode('detailed')}
+                onRetake={onRetake}
+              />
+            )}
+
+            {/* 2. DETAILED ANSWER REVIEW */}
+            {resultViewMode === 'detailed' && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-indigo-600" />
+                      <span>Xem lại bài làm & Lời giải chi tiết</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Kiểm tra đối chiếu đáp án, bài làm tự luận và hướng dẫn giải từng bước.
+                    </p>
+                  </div>
+
+                  {/* Filter Tabs */}
+                  <div className="flex bg-slate-100 p-1.5 rounded-xl shrink-0 gap-1">
+                    <button
+                      onClick={() => setFilterType('all')}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                        filterType === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Tất cả ({submission.answers.length})
+                    </button>
+                    <button
+                      onClick={() => setFilterType('wrong')}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                        filterType === 'wrong'
+                          ? 'bg-white text-rose-700 shadow-xs'
+                          : 'text-slate-600 hover:text-rose-700'
+                      }`}
+                    >
+                      🔴 Câu sai ({submission.wrongCount})
+                    </button>
+                    <button
+                      onClick={() => setFilterType('correct')}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                        filterType === 'correct'
+                          ? 'bg-white text-emerald-700 shadow-xs'
+                          : 'text-slate-600 hover:text-emerald-700'
+                      }`}
+                    >
+                      🟢 Câu đúng ({submission.correctCount})
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of Questions with Full Explanations */}
+                <div className="space-y-4">
               {filteredAnswers.map((ans) => {
-                const question = assignment.questions.find(q => q.id === ans.questionId);
+                const questionPool = (submission.shuffledQuestions && submission.shuffledQuestions.length > 0)
+                  ? submission.shuffledQuestions
+                  : assignment.questions;
+                const question = questionPool.find(q => q.id === ans.questionId) || assignment.questions.find(q => q.id === ans.questionId);
                 if (!question) return null;
 
                 const isCorrect = ans.isCorrect;
@@ -478,16 +524,45 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
                     </div>
 
                     {/* Question Prompt */}
-                    <div className="text-base sm:text-lg font-bold text-slate-900 mb-5 leading-relaxed">
+                    <div className="text-base sm:text-lg font-bold text-slate-900 mb-4 leading-relaxed">
                       <MathDisplay text={question.question} />
                     </div>
+
+                    {/* Question Illustration Image (if available) */}
+                    {question.imageUrl && (
+                      <div className="mb-5 p-2 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center">
+                        <div 
+                          className="relative group cursor-pointer overflow-hidden rounded-xl"
+                          onClick={() => setLightboxImageUrl(question.imageUrl!)}
+                          title="Bấm để xem hình phóng to"
+                        >
+                          <img 
+                            src={question.imageUrl} 
+                            alt={`Hình vẽ câu ${question.order}`}
+                            className="max-h-64 max-w-full object-contain rounded-xl shadow-xs transition-transform duration-200 group-hover:scale-[1.02]"
+                          />
+                          <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl pointer-events-none">
+                            <span className="px-3 py-1 bg-black/80 text-white text-xs font-semibold rounded-full flex items-center gap-1.5 backdrop-blur-xs">
+                              <ZoomIn className="w-3.5 h-3.5" />
+                              <span>Bấm để phóng to hình vẽ</span>
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-slate-500 mt-1.5">
+                          (Nhấp vào hình vẽ để xem phóng to chi tiết)
+                        </span>
+                      </div>
+                    )}
 
                     {/* 1. If multiple choice: display options */}
                     {!isEssayQuestion(question) && question.options && question.options.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
                         {question.options.map((opt) => {
-                          const isStudentChoice = ans.selectedAnswer === opt.id;
-                          const isCorrectChoice = question.correctAnswer === opt.id;
+                          const isStudentChoice = ans.selectedAnswer === opt.id || 
+                            (ans.originalSelectedLabel && ans.originalSelectedLabel === opt.id) ||
+                            (ans.selectedOptionText && opt.text && ans.selectedOptionText.trim() === opt.text.trim());
+                          const isCorrectChoice = question.correctAnswer === opt.id ||
+                            (question.correctAnswer && opt.text && question.correctAnswer.trim() === opt.text.trim());
 
                           let optContainerClass = 'border-slate-200 bg-slate-50/70 text-slate-700';
                           let badgeClass = 'bg-slate-200 text-slate-700';
@@ -654,7 +729,9 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
               })}
             </div>
           </div>
-        ) : (
+        )}
+      </div>
+    ) : (
           <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 text-center text-xs text-amber-800">
             Giáo viên đã tắt chế độ xem đáp án chi tiết cho bài kiểm tra này.
           </div>

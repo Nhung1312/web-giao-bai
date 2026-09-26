@@ -143,30 +143,58 @@ export function shuffleContestQuestions(
       };
     }
 
-    // Tìm text của đáp án đúng hiện tại
-    const currentCorrect = q.options.find(
-      opt => opt.id.trim().toUpperCase() === (q.correctAnswer || '').trim().toUpperCase()
-    );
-    const correctText = currentCorrect ? currentCorrect.text.trim() : '';
+    const cleanCorrect = (q.correctAnswer || '').trim().toUpperCase();
 
-    const optsCopy = [...q.options];
-    for (let i = optsCopy.length - 1; i > 0; i--) {
+    // 1. So khớp theo id (ví dụ: 'A', 'B', 'C', 'D')
+    let originalCorrectIdx = q.options.findIndex(
+      opt => (opt.id || '').trim().toUpperCase() === cleanCorrect
+    );
+
+    // 2. Nếu chưa thấy, thử so khớp theo nhãn chuẩn A=0, B=1, C=2, D=3
+    if (originalCorrectIdx === -1 && ['A', 'B', 'C', 'D', 'E', 'F'].includes(cleanCorrect)) {
+      const idxFromLetter = cleanCorrect.charCodeAt(0) - 65;
+      if (idxFromLetter >= 0 && idxFromLetter < q.options.length) {
+        originalCorrectIdx = idxFromLetter;
+      }
+    }
+
+    // 3. Nếu vẫn chưa thấy, so khớp theo nội dung văn bản (text)
+    if (originalCorrectIdx === -1 && cleanCorrect) {
+      originalCorrectIdx = q.options.findIndex(
+        opt => (opt.text || '').trim().toUpperCase() === cleanCorrect
+      );
+    }
+
+    // Gắn nhãn ban đầu (originalId) và cờ isCorrect ban đầu cho từng option
+    const taggedOptions = q.options.map((opt, optI) => {
+      const fallbackLabel = standardLabels[optI] || String.fromCharCode(65 + optI);
+      const originalId = (opt.id && opt.id.trim()) ? opt.id.trim() : fallbackLabel;
+      const isOriginallyCorrect = originalCorrectIdx !== -1 
+        ? optI === originalCorrectIdx 
+        : (originalId.toUpperCase() === cleanCorrect);
+
+      return {
+        ...opt,
+        originalId,
+        isOriginallyCorrect
+      };
+    });
+
+    for (let i = taggedOptions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [optsCopy[i], optsCopy[j]] = [optsCopy[j], optsCopy[i]];
+      [taggedOptions[i], taggedOptions[j]] = [taggedOptions[j], taggedOptions[i]];
     }
 
     let newCorrect = q.correctAnswer;
-    const newOptions: QuestionOption[] = optsCopy.map((opt, optIdx) => {
+    const newOptions: (QuestionOption & { originalId?: string })[] = taggedOptions.map((opt, optIdx) => {
       const label = standardLabels[optIdx] || String.fromCharCode(65 + optIdx);
-      if (
-        (correctText && opt.text.trim() === correctText) ||
-        (!correctText && opt.id.trim().toUpperCase() === (q.correctAnswer || '').trim().toUpperCase())
-      ) {
+      if (opt.isOriginallyCorrect) {
         newCorrect = label;
       }
       return {
         id: label,
-        text: opt.text
+        text: opt.text,
+        originalId: opt.originalId
       };
     });
 

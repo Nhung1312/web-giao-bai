@@ -59,6 +59,12 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
   const [isAiGrading, setIsAiGrading] = useState<boolean>(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isSavingGrade, setIsSavingGrade] = useState<boolean>(false);
+  const [aiBreakdown, setAiBreakdown] = useState<any>(null);
+
+  // Batch AI Grading state
+  const [isBatchGrading, setIsBatchGrading] = useState<boolean>(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; studentName: string } | null>(null);
+  const [batchResultMsg, setBatchResultMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -152,6 +158,7 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
   const handleOpenGradingModal = (sub: ContestSubmission) => {
     setGradingSubmission(sub);
     setActiveEssayIndex(0);
+    setAiBreakdown(null);
     
     // Nạp câu tự luận đầu tiên
     const essayAnswers = sub.answers.filter(a => {
@@ -171,7 +178,18 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
     q: Question,
     ans: StudentAnswer
   ) => {
+    if (!aiService.hasApiKey()) {
+      const confirmSettings = window.confirm(
+        'Bạn chưa cài đặt Google Gemini API Key. Bạn có muốn chuyển đến Cài đặt để nhập API Key miễn phí không?'
+      );
+      if (confirmSettings) {
+        onNavigate('settings');
+      }
+      return;
+    }
+
     setIsAiGrading(true);
+    setAiBreakdown(null);
     try {
       const result = await aiService.gradeEssay({
         questionText: q.question,
@@ -185,11 +203,151 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
 
       setTeacherScoreInput(result.score);
       setTeacherFeedbackInput(result.feedback);
-      alert(`AI đã phân tích xong! Đề xuất: ${result.score}/${q.points} điểm.`);
-    } catch (e) {
-      alert('AI chấm điểm gặp sự cố: ' + String(e));
+      setAiBreakdown(result);
+    } catch (e: any) {
+      alert('AI chấm điểm gặp sự cố: ' + (e?.message || String(e)));
     } finally {
       setIsAiGrading(false);
+    }
+  };
+
+  // Chấm hàng loạt bài tự luận bằng Gemini AI
+  const handleBatchAiGrade = async () => {
+    if (!contest) return;
+    if (!aiService.hasApiKey()) {
+      const confirmNav = window.confirm(
+        'Bạn chưa cài đặt Google Gemini API Key. Bạn có muốn chuyển đến Cài đặt để nhập API Key miễn phí không?'
+      );
+      if (confirmNav) {
+        onNavigate('settings');
+      }
+      return;
+    }
+
+    const essayQuestions = contest.questions.filter(q => isEssayQuestion(q));
+    if (essayQuestions.length === 0) {
+      alert('Cuộc thi này không có câu hỏi tự luận.');
+      return;
+    }
+
+    const targetSubmissions = submissions.filter(s => s.hasEssay);
+    if (targetSubmissions.length === 0) {
+      alert('Chưa có học sinh nào nộp bài tự luận.');
+      return;
+    }
+
+    const unGradedSubs = targetSubmissions.filter(s => !s.isEssayGraded);
+    const subsToGrade = unGradedSubs.length > 0 ? unGradedSubs : targetSubmissions;
+
+    const confirmAction = window.confirm(
+      `Hệ thống sẽ dùng Gemini AI để tự động đọc ảnh bài làm và chấm điểm cho ${subsToGrade.length} bài thi tự luận.\n\nThầy/Cô có muốn bắt đầu không?`
+    );
+    if (!confirmAction) return;
+
+    setIsBatchGrading(true);
+    setBatchResultMsg(null);
+    let successCount = 0;
+    let updatedSubmissionsList = [...submissions];
+
+    try {
+      for (let i = 0; i < subsToGrade.length; i++) {
+        const sub = subsToGrade[i];
+        setBatchProgress({
+          current: i + 1,
+          total: subsToGrade.length,
+          studentName: sub.studentName
+        });
+
+        const updatedAnswers = [...sub.answers];
+        let newEssayScore = 0;
+        let newMcqScore = 0;
+        let newEarnedPointsTotal = 0;
+        let maxPointsTotal = 0;
+
+        for (let qIdx = 0; qIdx < contest.questions.length; qIdx++) {
+          const q = contest.questions[qIdx];
+          const isEssay = isEssayQuestion(q);
+          const ansIndex = updatedAnswers.findIndex(a => a.questionId === q.id);
+          const ans = ansIndex >= 0 ? updatedAnswers[ansIndex] : null;
+
+          if (isEssay && ans) {
+            try {
+              const res = await aiService.gradeEssay({
+                questionText: q.question,
+                studentAnswerText: ans.studentSolutionText || ans.selectedAnswer || '',
+                essayImages: ans.essayImages || [],
+                maxPoints: q.points || 2.0,
+                correctAnswerCriteria: q.correctAnswer,
+                rubric: q.rubric,
+                grade: contest.grade
+              });
+
+              const teacherScore = res.score;
+              const teacherFeedback = `[Gemini AI]: ${res.feedback}`;
+              const pointsEarned = res.score;
+              const isCorrect = res.score >= (q.points * 0.5);
+
+              updatedAnswers[ansIndex] = {
+                ...ans,
+                teacherScore,
+                teacherFeedback,
+                pointsEarned,
+                isCorrect,
+                aiScore: res.score,
+                aiFeedback: res.feedback,
+                aiGraded: true
+              };
+
+              newEssayScore += pointsEarned;
+              newEarnedPointsTotal += pointsEarned;
+            } catch (err) {
+              console.warn(`Lỗi chấm AI câu ${q.id} cho ${sub.studentName}:`, err);
+              const pts = ans.teacherScore ?? ans.pointsEarned ?? 0;
+              newEssayScore += pts;
+              newEarnedPointsTotal += pts;
+            }
+          } else if (ans) {
+            const pts = ans.pointsEarned || 0;
+            newMcqScore += pts;
+            newEarnedPointsTotal += pts;
+          }
+          maxPointsTotal += (q.points || 1);
+        }
+
+        const newTotalScore = maxPointsTotal > 0
+          ? Math.round((newEarnedPointsTotal / maxPointsTotal) * 100) / 10
+          : 0;
+
+        const updatedSub: ContestSubmission = {
+          ...sub,
+          answers: updatedAnswers,
+          essayScore: newEssayScore,
+          mcqScore: newMcqScore,
+          totalScore: newTotalScore,
+          isEssayGraded: true
+        };
+
+        StorageService.saveContestSubmission(updatedSub);
+        await FirestoreService.updateContestSubmission(updatedSub.id, {
+          answers: updatedAnswers,
+          essayScore: newEssayScore,
+          mcqScore: newMcqScore,
+          totalScore: newTotalScore,
+          isEssayGraded: true
+        });
+
+        updatedSubmissionsList = updatedSubmissionsList.map(s => s.id === updatedSub.id ? updatedSub : s);
+        successCount++;
+      }
+
+      const ranked = rankContestSubmissions(updatedSubmissionsList);
+      setSubmissions(ranked);
+      setBatchResultMsg(`✅ Hoàn thành xuất sắc! Đã dùng Gemini AI chấm điểm và cập nhật bảng xếp hạng cho ${successCount} bài thi.`);
+    } catch (batchErr: any) {
+      alert('Quá trình chấm hàng loạt gặp sự cố: ' + (batchErr?.message || String(batchErr)));
+    } finally {
+      setIsBatchGrading(false);
+      setBatchProgress(null);
     }
   };
 
@@ -472,6 +630,74 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
           </div>
         )}
       </div>
+
+      {/* BATCH AI GRADING BANNER */}
+      {contest.questions.some(q => isEssayQuestion(q)) && (
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50 to-pink-50 dark:from-purple-950/40 dark:via-indigo-950/40 dark:to-pink-950/40 border-2 border-purple-200/80 dark:border-purple-800/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200 dark:shadow-indigo-950 shrink-0">
+              <Sparkles className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                <h3 className="font-black text-slate-900 dark:text-white text-sm">
+                  Trợ lý AI Gemini Chấm Điểm Tự Luận
+                </h3>
+                {submissions.filter(s => s.hasEssay && !s.isEssayGraded).length > 0 ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[11px] font-black animate-pulse">
+                    {submissions.filter(s => s.hasEssay && !s.isEssayGraded).length} bài thi chờ chấm
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-black">
+                    ✓ Đã chấm xong toàn bộ
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                AI tự động đọc ảnh chụp bài giải viết tay của học sinh, đối chiếu barem điểm và ghi lời nhận xét chi tiết.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              onClick={handleBatchAiGrade}
+              disabled={isBatchGrading || submissions.length === 0}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs shadow-md shadow-purple-500/20 flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>
+                {isBatchGrading
+                  ? 'Đang xử lý...'
+                  : submissions.filter(s => s.hasEssay && !s.isEssayGraded).length > 0
+                  ? `AI Chấm ${submissions.filter(s => s.hasEssay && !s.isEssayGraded).length} bài chờ chấm`
+                  : 'AI Chấm lại toàn bộ bài thi'}
+              </span>
+            </button>
+
+            <button
+              onClick={() => onNavigate('settings')}
+              className="p-2.5 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              title="Cài đặt API Key & Model Gemini"
+            >
+              ⚙️
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Thông báo kết quả chấm hàng loạt */}
+      {batchResultMsg && (
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs font-bold flex items-center justify-between">
+          <span>{batchResultMsg}</span>
+          <button
+            onClick={() => setBatchResultMsg(null)}
+            className="text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer ml-3"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
 
       {/* Main Tabs: Bảng xếp hạng & Phổ điểm */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
@@ -893,6 +1119,52 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
                         </button>
                       </div>
 
+                      {/* Chi tiết phân tích AI */}
+                      {aiBreakdown && (
+                        <div className="p-4 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs space-y-2.5 animate-in fade-in">
+                          <div className="flex items-center justify-between font-black text-indigo-900 dark:text-indigo-200">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="w-4 h-4 text-indigo-600" />
+                              <span>Phân tích chi tiết từ Gemini AI:</span>
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-900 dark:text-indigo-100 font-black text-xs">
+                              {aiBreakdown.score} / {currentActiveQ.points} điểm
+                            </span>
+                          </div>
+
+                          {aiBreakdown.strengths && aiBreakdown.strengths.length > 0 && (
+                            <div>
+                              <span className="font-bold text-emerald-700 dark:text-emerald-400 block mb-0.5">✓ Điểm mạnh:</span>
+                              <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 space-y-0.5 pl-1">
+                                {aiBreakdown.strengths.map((s: string, sIdx: number) => (
+                                  <li key={sIdx}>{s}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {aiBreakdown.improvements && aiBreakdown.improvements.length > 0 && (
+                            <div>
+                              <span className="font-bold text-amber-700 dark:text-amber-400 block mb-0.5">⚠️ Điểm cần khắc phục / lưu ý:</span>
+                              <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 space-y-0.5 pl-1">
+                                {aiBreakdown.improvements.map((im: string, imIdx: number) => (
+                                  <li key={imIdx}>{im}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {aiBreakdown.stepByStepCorrection && (
+                            <div className="pt-2 border-t border-indigo-200 dark:border-indigo-800">
+                              <span className="font-bold text-indigo-800 dark:text-indigo-300 block mb-0.5">💡 Lời giải chuẩn mực đối chiếu:</span>
+                              <div className="whitespace-pre-line text-slate-800 dark:text-slate-200 font-mono text-[11px] p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-indigo-900">
+                                {aiBreakdown.stepByStepCorrection}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Nhập điểm & Nhận xét của Giáo viên */}
                       <div className="space-y-3 pt-2">
                         <div className="flex items-center justify-between">
@@ -950,6 +1222,43 @@ export const TeacherContestResults: React.FC<TeacherContestResultsProps> = ({
                   <Save className="w-4 h-4" />
                   <span>{isSavingGrade ? 'Đang lưu...' : 'Lưu điểm câu này'}</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TIẾN TRÌNH CHẤM BÀI HÀNG LOẠT BẰNG AI */}
+      {isBatchGrading && batchProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-5 text-center">
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-indigo-300 dark:shadow-indigo-950 animate-bounce">
+              <Sparkles className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                Gemini AI Đang Chấm Bài Thi
+              </h3>
+              <p className="text-xs text-slate-500">
+                Đang phân tích bài làm của học sinh: <strong className="text-indigo-600 dark:text-indigo-400">{batchProgress.studentName}</strong>
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1.5 text-left">
+              <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                <span>Tiến trình hoàn thành:</span>
+                <span>{batchProgress.current} / {batchProgress.total} bài</span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
+                <div
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-full rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${Math.round((batchProgress.current / batchProgress.total) * 100)}%` }}
+                />
+              </div>
+              <div className="text-[11px] text-slate-400 text-center pt-1 font-medium">
+                Vui lòng không đóng trình duyệt trong khi AI đang xử lý...
               </div>
             </div>
           </div>

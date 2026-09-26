@@ -49,11 +49,13 @@ import {
   Zap,
   CheckCircle2,
   Calculator as CalculatorIcon,
-  Edit3
+  Edit3,
+  ZoomIn
 } from 'lucide-react';
 import { ScientificCalculatorModal } from '../../components/ScientificCalculatorModal';
 import { DigitalScratchpadModal } from '../../components/DigitalScratchpadModal';
 import { useMistakeVaultStore } from '../../store/useMistakeVaultStore';
+import { ExamReviewSheetModal } from '../../components/ExamReviewSheetModal';
 
 interface StudentExamPageProps {
   assignment: Assignment;
@@ -643,25 +645,32 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         const images = essayImagesByQuestion[eq.id] || [];
 
         if (solutionText || images.length > 0) {
-          try {
-            const evalResult = await aiService.gradeEssay({
-              questionText: eq.question,
-              studentAnswerText: solutionText,
-              essayImages: images,
-              maxPoints: eq.points,
-              correctAnswerCriteria: eq.correctAnswer,
-              rubric: eq.rubric,
-              grade: currentAssignment.grade,
-              topicHint: eq.topicHint
-            });
+          if (aiService.hasApiKey()) {
+            try {
+              const evalResult = await aiService.gradeEssay({
+                questionText: eq.question,
+                studentAnswerText: solutionText,
+                essayImages: images,
+                maxPoints: eq.points,
+                correctAnswerCriteria: eq.correctAnswer,
+                rubric: eq.rubric,
+                grade: currentAssignment.grade,
+                topicHint: eq.topicHint
+              });
 
+              aiFeedbacks[eq.id] = {
+                score: evalResult.score,
+                feedback: evalResult.feedback,
+                graded: true
+              };
+            } catch (e) {
+              console.warn('AI evaluation error on submit:', e);
+            }
+          } else {
             aiFeedbacks[eq.id] = {
-              score: evalResult.score,
-              feedback: evalResult.feedback,
-              graded: true
+              graded: false,
+              feedback: 'Bài tự luận đã được ghi nhận đầy đủ và đang chờ chấm điểm.'
             };
-          } catch (e) {
-            console.warn('AI evaluation error on submit:', e);
           }
         }
       }
@@ -1264,11 +1273,37 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
 
                   {/* Question Body Text */}
                   <div 
-                    className={`font-semibold mb-6 select-none ${getFontSizeClass()}`}
+                    className={`font-semibold mb-4 select-none ${getFontSizeClass()}`}
                     style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                   >
                     <MathDisplay text={currentQ.question} />
                   </div>
+
+                  {/* Question Illustration Image (if available) */}
+                  {currentQ.imageUrl && (
+                    <div className="mb-6 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center">
+                      <div 
+                        className="relative group cursor-pointer overflow-hidden rounded-xl"
+                        onClick={() => setLightboxImageUrl(currentQ.imageUrl!)}
+                        title="Bấm để xem hình phóng to"
+                      >
+                        <img 
+                          src={currentQ.imageUrl} 
+                          alt={`Hình vẽ câu ${currentIndex + 1}`}
+                          className="max-h-72 max-w-full object-contain rounded-xl shadow-xs transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl pointer-events-none">
+                          <span className="px-3 py-1 bg-black/80 text-white text-xs font-semibold rounded-full flex items-center gap-1.5 backdrop-blur-xs">
+                            <ZoomIn className="w-3.5 h-3.5" />
+                            <span>Bấm để phóng to hình vẽ</span>
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                        (Nhấp vào hình vẽ để xem phóng to chi tiết)
+                      </span>
+                    </div>
+                  )}
 
                   {/* A. CÂU HỎI TỰ LUẬN HOẶC CÓ KHUNG BÀI GIẢI CHI TIẾT */}
                   {isEssayQuestion(currentQ) ? (
@@ -1729,61 +1764,24 @@ export const StudentExamPage: React.FC<StudentExamPageProps> = ({
         </main>
       )}
 
-      {/* CONFIRM SUBMIT MODAL */}
-      {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 dark:border-slate-800 text-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center mx-auto">
-              <Flag className="w-7 h-7" />
-            </div>
-
-            <div>
-              <h3 className="font-extrabold text-xl text-slate-900 dark:text-white">
-                Xác nhận nộp bài thi?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Bài thi: <strong>{assignment.title}</strong>
-              </p>
-            </div>
-
-            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs space-y-1.5 text-left border border-slate-200 dark:border-slate-700">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Đã hoàn thành:</span>
-                <span className="font-extrabold text-indigo-600">{answeredCount}/{questions.length} câu</span>
-              </div>
-              {unansweredCount > 0 && (
-                <div className="flex justify-between text-rose-600 font-bold">
-                  <span>Chưa làm:</span>
-                  <span>{unansweredCount} câu</span>
-                </div>
-              )}
-              {tabSwitchCount > 0 && (
-                <div className="flex justify-between text-amber-600 font-bold">
-                  <span>Số lần rời màn hình:</span>
-                  <span>{tabSwitchCount} lần</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center space-x-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-3 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                Làm tiếp
-              </button>
-              <button
-                type="button"
-                onClick={submitExam}
-                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all active:scale-95"
-              >
-                Nộp bài ngay
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* EXAM REVIEW SHEET MODAL (PHIẾU DUYỆT BÀI LÀM TRƯỚC KHI NỘP) */}
+      <ExamReviewSheetModal
+        isOpen={showSubmitModal}
+        onClose={() => setShowSubmitModal(false)}
+        onSubmit={submitExam}
+        questions={questions}
+        answers={answers}
+        studentSolutions={studentSolutions}
+        essayImagesByQuestion={essayImagesByQuestion}
+        flaggedQuestions={flaggedQuestions}
+        onSelectOption={handleSelectOption}
+        onJumpToQuestion={(idx) => setCurrentIndex(idx)}
+        timeLeft={timeLeft}
+        studentName={studentName}
+        className={className}
+        assignmentTitle={assignment.title}
+        tabSwitchCount={tabSwitchCount}
+      />
 
       {/* CONFIRM RESET MODAL */}
       {showResetConfirmModal && (

@@ -36,36 +36,64 @@ export function shuffleAssignmentQuestionsAndOptions(assignment: Assignment): As
       };
     }
 
-    // Xác định nội dung văn bản của đáp án đúng ban đầu
-    const originalCorrect = q.options.find(
-      opt => opt.id.trim().toUpperCase() === (q.correctAnswer || '').trim().toUpperCase()
-    );
-    const correctText = originalCorrect ? originalCorrect.text.trim() : '';
+    const cleanCorrect = (q.correctAnswer || '').trim().toUpperCase();
 
-    // Shuffle mảng options
-    const optionsShuffled = [...q.options];
-    for (let i = optionsShuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
+    // Xác định chính xác phương án đúng ban đầu
+    // 1. So khớp theo id (ví dụ: 'A', 'B', 'C', 'D')
+    let originalCorrectIdx = q.options.findIndex(
+      opt => (opt.id || '').trim().toUpperCase() === cleanCorrect
+    );
+
+    // 2. Nếu chưa thấy, thử so khớp theo nhãn chuẩn A=0, B=1, C=2, D=3
+    if (originalCorrectIdx === -1 && ['A', 'B', 'C', 'D', 'E', 'F'].includes(cleanCorrect)) {
+      const idxFromLetter = cleanCorrect.charCodeAt(0) - 65;
+      if (idxFromLetter >= 0 && idxFromLetter < q.options.length) {
+        originalCorrectIdx = idxFromLetter;
+      }
     }
 
-    // Gán lại nhãn chuẩn A, B, C, D cho các vị trí mới và tìm vị trí mới của đáp án đúng
+    // 3. Nếu vẫn chưa thấy, so khớp theo nội dung văn bản (text)
+    if (originalCorrectIdx === -1 && cleanCorrect) {
+      originalCorrectIdx = q.options.findIndex(
+        opt => (opt.text || '').trim().toUpperCase() === cleanCorrect
+      );
+    }
+
+    // Gắn nhãn ban đầu (originalId) và cờ isCorrect ban đầu cho từng option
+    const taggedOptions = q.options.map((opt, idx) => {
+      const fallbackLabel = standardLabels[idx] || String.fromCharCode(65 + idx);
+      const originalId = (opt.id && opt.id.trim()) ? opt.id.trim() : fallbackLabel;
+      const isOriginallyCorrect = originalCorrectIdx !== -1 
+        ? idx === originalCorrectIdx 
+        : (originalId.toUpperCase() === cleanCorrect);
+
+      return {
+        ...opt,
+        originalId,
+        isOriginallyCorrect
+      };
+    });
+
+    // Fisher-Yates shuffle mảng options
+    for (let i = taggedOptions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [taggedOptions[i], taggedOptions[j]] = [taggedOptions[j], taggedOptions[i]];
+    }
+
+    // Gán lại nhãn chuẩn A, B, C, D cho các vị trí mới và cập nhật vị trí mới của đáp án đúng
     let newCorrectAnswer = q.correctAnswer;
 
-    const newOptions: QuestionOption[] = optionsShuffled.map((opt, optIdx) => {
+    const newOptions: (QuestionOption & { originalId?: string })[] = taggedOptions.map((opt, optIdx) => {
       const newLabel = standardLabels[optIdx] || String.fromCharCode(65 + optIdx);
       
-      // Nếu option này là đáp án đúng ban đầu (so khớp theo text hoặc id ban đầu)
-      if (
-        (correctText && opt.text.trim() === correctText) ||
-        (!correctText && opt.id.trim().toUpperCase() === (q.correctAnswer || '').trim().toUpperCase())
-      ) {
+      if (opt.isOriginallyCorrect) {
         newCorrectAnswer = newLabel;
       }
 
       return {
         id: newLabel,
-        text: opt.text
+        text: opt.text,
+        originalId: opt.originalId
       };
     });
 

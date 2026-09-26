@@ -570,6 +570,15 @@ export const ContestExamPage: React.FC = () => {
               {/* Question Text with KaTeX */}
               <div className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white leading-relaxed py-2">
                 <MathDisplay content={currentQ.question} />
+                {currentQ.imageUrl && (
+                  <div className="my-3 flex justify-center">
+                    <img 
+                      src={currentQ.imageUrl} 
+                      alt="Hình vẽ câu hỏi" 
+                      className="max-h-72 max-w-full object-contain rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs" 
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

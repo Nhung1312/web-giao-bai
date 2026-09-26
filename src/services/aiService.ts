@@ -213,7 +213,7 @@ export class HybridAIService implements IAIService {
   }
 
   /**
-   * Chấm điểm bài tự luận (Hỗ trợ phân tích ảnh chụp bài làm học sinh)
+   * Chấm điểm bài tự luận (Hỗ trợ phân tích ảnh chụp bài làm học sinh bằng Gemini Multimodal)
    */
   async gradeEssay(params: GradeEssayParams): Promise<EssayGradingResult> {
     const {
@@ -236,42 +236,45 @@ export class HybridAIService implements IAIService {
         const model = this.getModel();
 
         const promptText = `
-Bạn là Giám khảo chấm thi môn Toán THCS (Chương trình GDPT mới của Bộ GD&ĐT Việt Nam).
-Nhiệm vụ của bạn là chấm bài làm tự luận của học sinh, đọc kỹ hình ảnh bài làm viết tay (nếu có) hoặc bài giải bằng văn bản.
+Bạn là Giám khảo chấm thi chuyên nghiệp môn Toán THCS (Chương trình GDPT mới của Bộ Giáo dục & Đào tạo Việt Nam).
+Nhiệm vụ của bạn: Đọc kỹ đề bài, tiêu chí chấm và bài làm của học sinh (gồm ảnh chụp bài làm viết tay hoặc lời giải bằng văn bản), phân tích chi tiết và chấm điểm chính xác, công tâm.
 
-Thông tin bài tập:
+THÔNG TIN ĐỀ THI:
 - Khối lớp: Toán ${grade}
 - Chủ đề: ${topicHint || 'Toán học THCS'}
 - Đề bài: ${questionText}
-- Thang điểm tối đa của câu: ${maxPoints} điểm
-- Hướng dẫn chấm / Tiêu chí / Đáp án mẫu: ${rubric || correctAnswerCriteria || 'Chấm theo các bước lập luận, tính toán và kết luận chính xác.'}
+- Thang điểm tối đa: ${maxPoints} điểm
+- Hướng dẫn chấm / Barem / Tiêu chí đáp án: ${rubric || correctAnswerCriteria || 'Chấm theo các bước lập luận, biến đổi đại số / hình học và kết luận chuẩn xác.'}
 
-Bài làm của học sinh:
-- Phần văn bản học sinh nhập: ${studentAnswerText || '(Học sinh không nhập văn bản, xem hình ảnh đính kèm)'}
-- Số lượng ảnh bài làm đính kèm: ${essayImages.length} ảnh.
+BÀI LÀM CỦA HỌC SINH:
+- Lời giải văn bản học sinh nhập: ${studentAnswerText || '(Không nhập văn bản, xem hình ảnh bài giải đính kèm)'}
+- Số lượng ảnh chụp bài làm đính kèm: ${essayImages.length} ảnh.
 
-Quy tắc chấm điểm:
-1. Đọc kỹ từng bước giải, biến đổi đại số, lập luận hình học, điều kiện xác định và kết luận.
-2. Cho điểm chi tiết theo thang 0.25đ / 0.5đ từng bước. Tổng điểm không vượt quá ${maxPoints}.
-3. Nhận xét chân thành, sư phạm, chỉ rõ ưu điểm và các lỗi sai sót (nếu có).
-4. Cung cấp lời giải chuẩn mực ngắn gọn để học sinh sửa bài.
+QUY TẮC CHẤM ĐIỂM SƯ PHẠM:
+1. Đọc và nhận diện kỹ chữ viết tay, hình vẽ, ký hiệu toán học trong ảnh đính kèm (nếu có).
+2. Kiểm tra điều kiện xác định, các bước biến đổi, định lý hình học và kết luận.
+3. Cho điểm tương ứng với mức độ hoàn thành theo bước (bước đúng được điểm, bước sai không tính điểm tiếp theo nhưng không trừ điểm oan phần trước).
+4. Điểm chấm ("score") là số thực từ 0 đến ${maxPoints} (làm tròn đến 0.25 điểm).
+5. Nhận xét chi tiết, mang tính khích lệ học sinh, chỉ rõ ưu điểm và lỗi sai cần sửa.
 
-Hãy trả về kết quả dưới định dạng JSON duy nhất (không bọc text ngoài JSON) với cấu trúc sau:
+YÊU CẦU ĐẦU RA:
+Trả về duy nhất định dạng JSON (không có ký tự ngoài JSON) theo cấu trúc:
 {
-  "score": (số thực từ 0 đến ${maxPoints}, ví dụ 1.5),
+  "score": (số thực từ 0 đến ${maxPoints}),
   "maxScore": ${maxPoints},
   "feedback": "Nhận xét tổng quan súc tích về bài làm của học sinh",
   "strengths": ["Ưu điểm 1", "Ưu điểm 2"],
   "improvements": ["Lỗi sai hoặc điểm cần khắc phục 1", "Điểm cần lưu ý 2"],
-  "stepByStepCorrection": "Các bước giải chi tiết chuẩn xác ngắn gọn"
+  "stepByStepCorrection": "Các bước giải chuẩn mực ngắn gọn để học sinh đối chiếu"
 }
 `;
 
-        // Chuẩn bị payload nội dung (bao gồm ảnh nếu có)
+        // Chuẩn bị payload nội dung (bao gồm text và ảnh nếu có)
         const contentsPayload: any[] = [{ text: promptText }];
 
-        // Xử lý các ảnh chụp bài làm (Base64 data URL)
+        // Xử lý các ảnh chụp bài làm
         for (const imgUrl of essayImages) {
+          if (!imgUrl) continue;
           if (imgUrl.startsWith('data:')) {
             const matches = imgUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
             if (matches && matches[2]) {
@@ -282,30 +285,60 @@ Hãy trả về kết quả dưới định dạng JSON duy nhất (không bọc
                 }
               });
             }
+          } else if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
+            try {
+              const res = await fetch(imgUrl);
+              const blob = await res.blob();
+              const buffer = await blob.arrayBuffer();
+              const base64 = btoa(
+                new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+              );
+              contentsPayload.push({
+                inlineData: {
+                  mimeType: blob.type || 'image/jpeg',
+                  data: base64
+                }
+              });
+            } catch (fetchErr) {
+              console.warn('Không thể tải ảnh ngoài để AI chấm:', fetchErr);
+            }
           }
         }
 
         const response = await ai.models.generateContent({
           model: model,
-          contents: contentsPayload
+          contents: contentsPayload,
+          config: {
+            responseMimeType: 'application/json'
+          }
         });
 
-        const textResponse = response.text || '';
+        const textResponse = (response.text || '').trim();
         // Extract JSON from response
-        const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+        const cleanJson = textResponse.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+        const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
+          const rawScore = Number(parsed.score);
+          const validScore = isNaN(rawScore) ? 0 : Math.min(maxPoints, Math.max(0, rawScore));
+          // Làm tròn đến 0.25đ
+          const roundedScore = Math.round(validScore * 4) / 4;
+
           return {
-            score: Math.min(maxPoints, Math.max(0, Number(parsed.score) || 0)),
+            score: roundedScore,
             maxScore: maxPoints,
-            feedback: parsed.feedback || 'Bài làm đã được AI chấm điểm và đánh giá.',
-            strengths: Array.isArray(parsed.strengths) ? parsed.strengths : ['Trình bày có bố cục rõ ràng'],
+            feedback: parsed.feedback || 'Bài làm đã được Gemini AI phân tích và chấm điểm chi tiết.',
+            strengths: Array.isArray(parsed.strengths) && parsed.strengths.length > 0 ? parsed.strengths : ['Trình bày có bố cục rõ ràng'],
             improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
             stepByStepCorrection: parsed.stepByStepCorrection || ''
           };
         }
-      } catch (geminiError) {
+      } catch (geminiError: any) {
         console.warn('Gemini gradeEssay call failed, falling back to smart rule engine:', geminiError);
+        const errMsg = geminiError?.message || String(geminiError);
+        if (errMsg.includes('API key') || errMsg.includes('403') || errMsg.includes('quota')) {
+          console.error('[AI Service] Sự cố Gemini API Key:', errMsg);
+        }
       }
     }
 

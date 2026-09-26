@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
+import { auth } from '../../firebase';
 import { aiService, HybridAIService } from '../../services/aiService';
 import { getAppLogo, setAppLogo, resetAppLogo } from '../../utils/logoHelper';
 import { 
@@ -82,16 +84,58 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, o
   };
 
   useEffect(() => {
-    const currentKey = hybridAi.getApiKey() || '';
-    setApiKeyInput(currentKey);
-    setSelectedModel(hybridAi.getModel() || 'gemini-2.5-flash');
-    setAutoGradeEnabled(hybridAi.isAutoGradeEnabled());
+    const loadSettings = async () => {
+      let currentKey = hybridAi.getApiKey() || '';
+      let currentModel = hybridAi.getModel() || 'gemini-2.5-flash';
+      let autoGrade = hybridAi.isAutoGradeEnabled();
+
+      // Nếu chưa có trên máy này, đọc từ tài khoản Firestore của giáo viên
+      if (!currentKey && auth.currentUser) {
+        try {
+          const profile = await FirestoreService.getTeacherProfile(auth.currentUser.uid);
+          if (profile?.geminiApiKey) {
+            currentKey = profile.geminiApiKey;
+            hybridAi.setApiKey(currentKey);
+          }
+          if (profile?.geminiModel) {
+            currentModel = profile.geminiModel;
+            hybridAi.setModel(currentModel);
+          }
+          if (typeof profile?.autoGradeEnabled === 'boolean') {
+            autoGrade = profile.autoGradeEnabled;
+            hybridAi.setAutoGradeEnabled(autoGrade);
+          }
+        } catch (e) {
+          console.warn('Lỗi đọc cấu hình AI từ Firestore:', e);
+        }
+      }
+
+      setApiKeyInput(currentKey);
+      setSelectedModel(currentModel);
+      setAutoGradeEnabled(autoGrade);
+    };
+
+    loadSettings();
   }, []);
 
-  const handleSaveApiKey = () => {
+  const handleSaveApiKey = async () => {
     hybridAi.setApiKey(apiKeyInput);
     hybridAi.setModel(selectedModel);
     hybridAi.setAutoGradeEnabled(autoGradeEnabled);
+
+    // Đồng bộ lên Cloud Firestore nếu giáo viên đã đăng nhập
+    if (auth.currentUser) {
+      try {
+        await FirestoreService.saveTeacherProfile(auth.currentUser.uid, {
+          geminiApiKey: apiKeyInput,
+          geminiModel: selectedModel,
+          autoGradeEnabled
+        });
+      } catch (err) {
+        console.warn('Lỗi đồng bộ API key lên Firestore:', err);
+      }
+    }
+
     setSavedKeySuccess(true);
     setTestResult(null);
     setTimeout(() => setSavedKeySuccess(false), 3000);
@@ -102,6 +146,11 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, o
       hybridAi.clearApiKey();
       setApiKeyInput('');
       setTestResult(null);
+      if (auth.currentUser) {
+        FirestoreService.saveTeacherProfile(auth.currentUser.uid, {
+          geminiApiKey: ''
+        }).catch(() => {});
+      }
       setSavedKeySuccess(true);
       setTimeout(() => setSavedKeySuccess(false), 3000);
     }
@@ -253,9 +302,9 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, o
                 onChange={(e) => setSelectedModel(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Khuyên dùng - Nhanh & chuẩn Toán)</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Chuyên sâu toán học & hình học)</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Tốc độ cao)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Khuyên dùng - Nhanh, chuẩn Toán & đọc ảnh bài làm)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Chuyên sâu hình học & suy luận Toán THCS)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Mô hình tư duy Toán nâng cao)</option>
               </select>
             </div>
 
