@@ -57,6 +57,7 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
   // Mini Quiz Mode
   const [quizMode, setQuizMode] = useState<boolean>(false);
   const [quizIndex, setQuizIndex] = useState<number>(0);
+  const [showConfirmClearAll, setShowConfirmClearAll] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
@@ -205,17 +206,41 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
             )}
 
             {mistakes.length > 0 && (
-              <button
-                onClick={() => {
-                  if (window.confirm('Bạn có chắc muốn xóa toàn bộ lịch sử trong Sổ tay câu sai?')) {
-                    clearAllMistakes();
-                  }
-                }}
-                className="text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 font-semibold px-2.5 py-1.5 rounded-xl border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
-                title="Xóa hết câu sai"
-              >
-                Xóa tất cả
-              </button>
+              <>
+                {showConfirmClearAll ? (
+                  <div className="flex items-center space-x-1.5 bg-rose-50 dark:bg-rose-950/80 p-1 rounded-xl border border-rose-200 dark:border-rose-900">
+                    <span className="text-[11px] font-bold text-rose-800 dark:text-rose-200 pl-1.5">
+                      Xóa toàn bộ sổ tay?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearAllMistakes();
+                        setShowConfirmClearAll(false);
+                      }}
+                      className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                    >
+                      Đồng ý xóa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmClearAll(false)}
+                      className="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowConfirmClearAll(true)}
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 font-semibold px-2.5 py-1.5 rounded-xl border border-transparent hover:border-rose-200 transition-colors cursor-pointer flex items-center space-x-1"
+                    title="Xóa toàn bộ câu sai trong sổ tay"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Xóa toàn bộ sổ tay</span>
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -363,10 +388,11 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
 
                       <button
                         onClick={() => removeMistake(m.id)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-700 transition-colors"
+                        className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 hover:border-rose-300 transition-colors cursor-pointer shadow-2xs"
                         title="Xóa câu này khỏi sổ tay"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        <span className="text-[11px]">Xóa câu này</span>
                       </button>
                     </div>
                   </div>

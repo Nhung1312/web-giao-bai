@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExamTemplate, Assignment, ClassRoom } from '../../types';
 import { FirestoreService } from '../../services/firestoreService';
+import { AiSolveExamModal } from '../../components/AiSolveExamModal';
 import { 
   Layers, 
   Plus, 
@@ -9,7 +10,8 @@ import {
   FileText, 
   BookOpen, 
   ArrowLeft,
-  Eye
+  Eye,
+  Sparkles
 } from 'lucide-react';
 
 interface ExamBankViewProps {
@@ -32,6 +34,7 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
   // State cho Modal giao bài
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [aiSolvingTemplate, setAiSolvingTemplate] = useState<ExamTemplate | null>(null);
   
   const [targetClassId, setTargetClassId] = useState(classes[0]?.id || 'all');
   const [duration, setDuration] = useState(45);
@@ -182,17 +185,28 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
                 <h3 className="font-bold text-slate-900 text-sm line-clamp-2 mb-1">{tpl.title}</h3>
                 {tpl.topic && <p className="text-[11px] text-slate-500 mb-3">{tpl.topic}</p>}
 
-                <div className="flex items-center gap-2 mt-2 pt-3 border-t border-slate-200/60">
+                <div className="flex items-center gap-1.5 mt-2 pt-3 border-t border-slate-200/60">
                   <button
                     onClick={(e) => handleOpenAssign(e, tpl)}
-                    className="flex-1 inline-flex justify-center items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition-colors"
+                    className="flex-1 inline-flex justify-center items-center space-x-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition-colors cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Giao bài</span>
                   </button>
                   <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAiSolvingTemplate(tpl);
+                    }}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 font-bold text-[11px] rounded-lg transition-colors cursor-pointer"
+                    title="AI Tự động giải đề & Lập đáp án chuẩn"
+                  >
+                    <Sparkles className="w-3 h-3 text-violet-600" />
+                    <span>AI Đáp án</span>
+                  </button>
+                  <button
                     onClick={(e) => handleDelete(e, tpl.id, tpl.title)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                     title="Xóa đề mẫu"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -300,6 +314,34 @@ export const ExamBankView: React.FC<ExamBankViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Solve & Answer Key Modal for Exam Template */}
+      {aiSolvingTemplate && (
+        <AiSolveExamModal
+          isOpen={!!aiSolvingTemplate}
+          onClose={() => setAiSolvingTemplate(null)}
+          examTitle={aiSolvingTemplate.title}
+          grade={aiSolvingTemplate.grade}
+          topic={aiSolvingTemplate.topic}
+          questions={aiSolvingTemplate.questions || []}
+          onApplyAnswers={async (updatedQuestions) => {
+            const updatedTpl: ExamTemplate = {
+              ...aiSolvingTemplate,
+              questions: updatedQuestions,
+              updatedAt: new Date().toISOString()
+            };
+            try {
+              await FirestoreService.saveExamTemplate(updatedTpl);
+              alert(`Đã cập nhật bảng đáp án chuẩn thành công cho đề "${updatedTpl.title}"!`);
+              setAiSolvingTemplate(null);
+              await loadTemplates();
+            } catch (err) {
+              console.error('Lỗi lưu đề mẫu:', err);
+              alert('Có lỗi khi lưu đáp án đề mẫu. Vui lòng thử lại.');
+            }
+          }}
+        />
       )}
     </div>
   );

@@ -40,6 +40,7 @@ export interface Question {
   topicHint?: string; // e.g. "Quy đồng mẫu số", "Rút gọn phân số"
   rubric?: string; // Hướng dẫn / tiêu chí chấm tự luận cho AI và Giáo viên
   imageUrl?: string; // MỚI: Hình vẽ minh họa / đồ thị hình học cho đề bài (tải file hoặc dán Ctrl+V)
+  dismissMissingImageWarning?: boolean; // Tùy chọn bỏ qua cảnh báo thiếu hình cho câu này
 }
 
 // ==========================================

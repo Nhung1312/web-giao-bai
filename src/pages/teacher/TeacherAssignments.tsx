@@ -4,6 +4,9 @@ import { StorageService } from '../../services/storageService';
 import { FileUploadModal } from '../../components/FileUploadModal';
 import { PrintExamModal } from '../../components/PrintExamModal';
 import { GenerateSimilarExamModal } from '../../components/GenerateSimilarExamModal';
+import { AiSolveExamModal } from '../../components/AiSolveExamModal';
+import { AiBatchSolveModal } from '../../components/AiBatchSolveModal';
+import { FirestoreService } from '../../services/firestoreService';
 import { 
   BookOpen, 
   Plus, 
@@ -28,9 +31,15 @@ import {
   Tag,
   Shuffle,
   Edit3,
-  Link2
+  Link2,
+  Sparkles,
+  AlertTriangle,
+  Image as ImageIcon,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { getAssignmentShareLink } from '../../utils/urlUtils';
+import { isQuestionMissingImage } from '../../utils/questionUtils';
 
 interface TeacherAssignmentsProps {
   assignments: Assignment[];
@@ -60,6 +69,10 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterTopicCategory, setFilterTopicCategory] = useState<string>('all');
   const [filterClass, setFilterClass] = useState<string>(initialFilterClass || 'all');
+  const [filterMissingImagesOnly, setFilterMissingImagesOnly] = useState<boolean>(false);
+  const [filterUnsolvedOnly, setFilterUnsolvedOnly] = useState<boolean>(false);
+  const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<string[]>([]);
+  const [showBatchSolveModal, setShowBatchSolveModal] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'questions' | 'duration'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -67,6 +80,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   const [showFileUploadModal, setShowFileUploadModal] = useState(false);
   const [printingAssignment, setPrintingAssignment] = useState<Assignment | null>(null);
   const [similarExamAssignment, setSimilarExamAssignment] = useState<Assignment | null>(null);
+  const [aiSolvingAssignment, setAiSolvingAssignment] = useState<Assignment | null>(null);
 
   const handleCopyLink = async (assignmentCode: string) => {
     const link = getAssignmentShareLink(assignmentCode);
@@ -167,12 +181,31 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
     return t === category.toLowerCase();
   };
 
-  const hasActiveFilters = filterGrade !== 'all' || filterTopicCategory !== 'all' || filterClass !== 'all' || searchQuery.trim() !== '';
+  // Nhận diện đề thi chưa có bảng đáp án chuẩn (toàn bộ câu trắc nghiệm mặc định A hoặc chưa có đáp án)
+  const isAssignmentUnsolved = (asg: Assignment): boolean => {
+    const mcqs = (asg.questions || []).filter(q => q.type === 'multiple_choice' || (q.options && q.options.length >= 2));
+    if (mcqs.length === 0) return false;
+    return mcqs.every(q => !q.correctAnswer || q.correctAnswer.trim().toUpperCase() === 'A');
+  };
+
+  // Đếm tổng số bài tập chưa có đáp án chuẩn
+  const totalUnsolvedAssignments = useMemo(() => {
+    return safeAssignments.filter(isAssignmentUnsolved).length;
+  }, [safeAssignments]);
+
+  // Đếm tổng số bài tập có chứa câu hỏi thiếu hình vẽ
+  const totalMissingImagesAssignments = useMemo(() => {
+    return safeAssignments.filter(asg => (asg.questions || []).some(q => isQuestionMissingImage(q))).length;
+  }, [safeAssignments]);
+
+  const hasActiveFilters = filterGrade !== 'all' || filterTopicCategory !== 'all' || filterClass !== 'all' || searchQuery.trim() !== '' || filterMissingImagesOnly || filterUnsolvedOnly;
 
   const clearAllFilters = () => {
     setFilterGrade('all');
     setFilterTopicCategory('all');
     setFilterClass('all');
+    setFilterMissingImagesOnly(false);
+    setFilterUnsolvedOnly(false);
     setSearchQuery('');
   };
 
@@ -189,6 +222,8 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
           if (!isDirectClass && !isNameMatch && !isAllClass) return false;
         }
         if (filterTopicCategory !== 'all' && !matchesTopicCategory(a.topic, filterTopicCategory)) return false;
+        if (filterMissingImagesOnly && !(a.questions || []).some(q => isQuestionMissingImage(q))) return false;
+        if (filterUnsolvedOnly && !isAssignmentUnsolved(a)) return false;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
           const matchTitle = (a.title || '').toLowerCase().includes(q);
@@ -208,7 +243,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
         if (sortBy === 'duration') return (b.durationMinutes || 0) - (a.durationMinutes || 0);
         return 0;
       });
-  }, [safeAssignments, safeClasses, filterGrade, filterClass, filterTopicCategory, searchQuery, sortBy]);
+  }, [safeAssignments, safeClasses, filterGrade, filterClass, filterTopicCategory, filterMissingImagesOnly, filterUnsolvedOnly, searchQuery, sortBy]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -372,6 +407,38 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
               <PieChart className="w-3 h-3" />
               <span>Xác suất & Thống kê</span>
             </button>
+
+            {/* MỚI: Nút lọc nhanh các đề có câu hỏi thiếu hình vẽ */}
+            <button
+              onClick={() => setFilterMissingImagesOnly(!filterMissingImagesOnly)}
+              className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                filterMissingImagesOnly
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : totalMissingImagesAssignments > 0
+                  ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 hover:bg-amber-200 border border-amber-300 dark:border-amber-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+              title="Lọc các đề thi có chứa câu hỏi nhắc đến hình vẽ nhưng chưa có ảnh minh họa"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Đề có câu thiếu hình ({totalMissingImagesAssignments})</span>
+            </button>
+
+            {/* MỚI: Nút lọc nhanh các đề chưa có đáp án chuẩn */}
+            <button
+              onClick={() => setFilterUnsolvedOnly(!filterUnsolvedOnly)}
+              className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                filterUnsolvedOnly
+                  ? 'bg-violet-600 text-white shadow-xs'
+                  : totalUnsolvedAssignments > 0
+                  ? 'bg-violet-100 dark:bg-violet-950/70 text-violet-900 dark:text-violet-200 hover:bg-violet-200 border border-violet-300 dark:border-violet-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+              title="Lọc các đề thi chưa có bảng đáp án chuẩn (mặc định A)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+              <span>Đề chưa có đáp án ({totalUnsolvedAssignments})</span>
+            </button>
           </div>
 
           <div className="flex items-center space-x-3 text-slate-500 dark:text-slate-400">
@@ -400,6 +467,80 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* MỚI: THANH CHỌN HÀNG LOẠT & AI TỰ ĐỘNG GIẢI ĐỀ */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-violet-50 to-indigo-50/70 dark:from-violet-950/40 dark:to-indigo-950/30 rounded-3xl border border-violet-200 dark:border-violet-800/80 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Nút chọn tất cả / bỏ chọn */}
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedAssignmentIds.length === filteredAssignments.length && filteredAssignments.length > 0) {
+                setSelectedAssignmentIds([]);
+              } else {
+                setSelectedAssignmentIds(filteredAssignments.map(a => a.id));
+              }
+            }}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
+          >
+            {selectedAssignmentIds.length === filteredAssignments.length && filteredAssignments.length > 0 ? (
+              <>
+                <CheckSquare className="w-4 h-4 text-violet-600" />
+                <span>Bỏ chọn tất cả</span>
+              </>
+            ) : (
+              <>
+                <Square className="w-4 h-4 text-slate-400" />
+                <span>Chọn tất cả ({filteredAssignments.length} đề)</span>
+              </>
+            )}
+          </button>
+
+          {/* Nút chọn nhanh tất cả đề chưa có đáp án */}
+          {totalUnsolvedAssignments > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const unsolvedIds = safeAssignments.filter(isAssignmentUnsolved).map(a => a.id);
+                setSelectedAssignmentIds(unsolvedIds);
+              }}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer active:scale-95"
+              title="Chọn nhanh toàn bộ các đề thi đang để đáp án mặc định A"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>⚡ Chọn nhanh {totalUnsolvedAssignments} đề chưa có đáp án</span>
+            </button>
+          )}
+
+          {selectedAssignmentIds.length > 0 && (
+            <span className="text-xs font-black text-violet-900 dark:text-violet-200 pl-1">
+              Đã chọn: <strong className="text-sm underline">{selectedAssignmentIds.length}</strong> đề
+            </span>
+          )}
+        </div>
+
+        {/* Nút kích hoạt AI giải hàng loạt khi có đề được chọn */}
+        {selectedAssignmentIds.length > 0 && (
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setSelectedAssignmentIds([])}
+              className="text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 font-semibold px-2 py-1 cursor-pointer"
+            >
+              Hủy chọn
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowBatchSolveModal(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition-all active:scale-95 cursor-pointer animate-pulse"
+              title="Bắt đầu tiến trình AI tự động giải ngầm cho toàn bộ đề thi đã chọn"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>🤖 Bắt đầu AI Giải {selectedAssignmentIds.length} đề đã chọn</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Assignments Cards List */}
@@ -431,16 +572,41 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
             // Determine topic badge color
             const isGeometry = matchesTopicCategory(asg.topic, 'geometry');
             const isStatistics = matchesTopicCategory(asg.topic, 'statistics');
+            const missingImgCount = (asg.questions || []).filter(q => isQuestionMissingImage(q)).length;
+            const isSelected = selectedAssignmentIds.includes(asg.id);
+            const isUnsolved = isAssignmentUnsolved(asg);
 
             return (
               <div
                 key={asg.id}
-                className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                className={`bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border shadow-xs hover:shadow-md transition-all flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-violet-500 dark:border-violet-500 ring-2 ring-violet-400/40 bg-violet-50/20 dark:bg-violet-950/20'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
               >
                 <div>
                   {/* Top Meta */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Checkbox chọn đề để AI giải hàng loạt */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAssignmentIds(prev => 
+                            prev.includes(asg.id) ? prev.filter(id => id !== asg.id) : [...prev, asg.id]
+                          );
+                        }}
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all cursor-pointer mr-0.5 shrink-0 ${
+                          isSelected
+                            ? 'bg-violet-600 border-violet-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:border-violet-400'
+                        }`}
+                        title={isSelected ? "Bỏ chọn đề này" : "Chọn đề này để AI giải hàng loạt"}
+                      >
+                        {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
+                      </button>
+
                       <span className="bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 text-xs font-bold px-2.5 py-0.5 rounded-full">
                         Lớp {asg.grade}
                       </span>
@@ -456,6 +622,27 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                       }`}>
                         {isGeometry ? '📐 Hình học' : isStatistics ? '📊 Thống kê' : '🔢 Đại số'}
                       </span>
+
+                      {/* MỚI: Huy hiệu nếu đề chưa có bảng đáp án chuẩn */}
+                      {isUnsolved && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 flex items-center gap-1 shadow-2xs">
+                          <Sparkles className="w-3 h-3 text-rose-600" />
+                          <span>Chưa có đáp án</span>
+                        </span>
+                      )}
+
+                      {/* MỚI: Huy hiệu cảnh báo câu hỏi cần chèn hình vẽ */}
+                      {missingImgCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onNavigate('create', { editingAssignment: asg, initialFilter: 'missing_image' })}
+                          className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/90 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 transition-all cursor-pointer shadow-2xs"
+                          title="Đề có câu nhắc đến hình vẽ nhưng chưa chèn ảnh. Bấm để mở và lọc riêng các câu này"
+                        >
+                          <AlertTriangle className="w-3 h-3 text-amber-600 animate-pulse" />
+                          <span>{missingImgCount} câu cần chèn hình</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-1">
@@ -555,7 +742,16 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                  <button
+                    onClick={() => setAiSolvingAssignment(asg)}
+                    className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-violet-50 dark:bg-violet-950/60 hover:bg-violet-100 dark:hover:bg-violet-900/80 text-violet-700 dark:text-violet-300 font-bold rounded-xl transition-colors border border-violet-200 dark:border-violet-800 cursor-pointer shadow-2xs"
+                    title="AI Tự động giải toán & Thiết lập bảng đáp án chuẩn A-B-C-D (Bảo toàn 100% đề thi)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                    <span>AI Lập đáp án</span>
+                  </button>
+
                   <button
                     onClick={() => onNavigate('create', { editingAssignment: asg })}
                     className="flex items-center justify-center space-x-1 py-2 px-1.5 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-200 font-bold rounded-xl transition-colors border border-amber-200 dark:border-amber-800 cursor-pointer shadow-2xs"
@@ -659,6 +855,48 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
           onNavigateToEdit={(newAsg) => {
             onRefresh();
             onNavigate('results', { assignmentId: newAsg.id });
+          }}
+        />
+      )}
+
+      {/* AI Solve & Setup Answer Key Modal */}
+      {aiSolvingAssignment && (
+        <AiSolveExamModal
+          isOpen={!!aiSolvingAssignment}
+          onClose={() => setAiSolvingAssignment(null)}
+          examTitle={aiSolvingAssignment.title}
+          grade={aiSolvingAssignment.grade}
+          topic={aiSolvingAssignment.topic}
+          questions={aiSolvingAssignment.questions || []}
+          onApplyAnswers={async (updatedQuestions) => {
+            const updatedAsg: Assignment = {
+              ...aiSolvingAssignment,
+              questions: updatedQuestions
+            };
+            // 1. Lưu đồng bộ lên Cloud Firestore
+            try {
+              await FirestoreService.saveExam(updatedAsg);
+            } catch (err) {
+              console.warn('Lỗi lưu Firestore:', err);
+            }
+            // 2. Lưu bộ nhớ máy LocalStorage
+            StorageService.saveAssignment(updatedAsg);
+            alert(`Đã cập nhật bảng đáp án chuẩn thành công cho đề "${updatedAsg.title}"!\nHọc sinh khi nộp bài sẽ được tự động so khớp chính xác 100%.`);
+            setAiSolvingAssignment(null);
+            await onRefresh();
+          }}
+        />
+      )}
+
+      {/* AI Batch Solve Modal (Giải hàng loạt nhiều đề cùng lúc) */}
+      {showBatchSolveModal && (
+        <AiBatchSolveModal
+          isOpen={showBatchSolveModal}
+          onClose={() => setShowBatchSolveModal(false)}
+          selectedAssignments={safeAssignments.filter(a => selectedAssignmentIds.includes(a.id))}
+          onFinished={async () => {
+            await onRefresh();
+            setSelectedAssignmentIds([]);
           }}
         />
       )}
