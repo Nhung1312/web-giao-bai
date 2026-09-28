@@ -211,6 +211,69 @@ export class HybridAIService implements IAIService {
   }
 
   /**
+   * Gọi Gemini với cơ chế tự động thử lại (Exponential Backoff) & Chuyển đổi mô hình dự phòng khi Google quá tải (503/429/404)
+   */
+  async generateWithFailover(
+    ai: GoogleGenAI,
+    preferredModel: string,
+    contents: any,
+    config?: any,
+    maxRetriesPerModel: number = 2
+  ): Promise<{ response: any; modelUsed: string }> {
+    const candidateModels = [
+      preferredModel,
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+      'gemini-3.1-pro-preview'
+    ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
+    let lastError: any = null;
+
+    for (const modelName of candidateModels) {
+      for (let attempt = 1; attempt <= maxRetriesPerModel; attempt++) {
+        try {
+          const params: any = {
+            model: modelName,
+            contents: contents
+          };
+          if (config) {
+            params.config = config;
+          }
+          const response = await ai.models.generateContent(params);
+          return { response, modelUsed: modelName };
+        } catch (err: any) {
+          lastError = err;
+          const errStr = String(err?.message || err);
+
+          // 404 (model not found / deprecated) -> Bỏ qua thử ngay model tiếp theo
+          if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available')) {
+            break;
+          }
+
+          // 429 Hết quota ngày của model này (GenerateRequestsPerDay / RESOURCE_EXHAUSTED)
+          if (errStr.includes('quota') || errStr.includes('GenerateRequestsPerDay') || (errStr.includes('429') && errStr.includes('RESOURCE_EXHAUSTED'))) {
+            console.warn(`[AI Engine] Model ${modelName} đã hết hạn mức (Quota Exceeded). Đang tự động chuyển sang mô hình dự phòng tiếp theo...`);
+            break; // Ngắt vòng lặp model này để chuyển sang candidateModel tiếp theo
+          }
+
+          // 503 (High demand / Service Unavailable) hoặc 429 quá nhanh tạm thời (RPM spike)
+          if (errStr.includes('503') || errStr.includes('high demand') || errStr.includes('UNAVAILABLE') || errStr.includes('429')) {
+            console.warn(`[AI Engine] Máy chủ Google phản hồi quá tải tạm thời (${modelName}), đang chờ ${attempt * 2}s và thử lại...`);
+            await new Promise(r => setTimeout(r, attempt * 2000));
+            continue;
+          }
+
+          // Các lỗi khác (cú pháp, auth, v.v.)
+          throw err;
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
    * Kiểm tra kết nối API Key với Gemini
    */
   async testConnection(key?: string): Promise<{ success: boolean; message: string; modelUsed?: string }> {
@@ -222,42 +285,24 @@ export class HybridAIService implements IAIService {
       };
     }
 
-    let model = this.getModel();
+    const model = this.getModel();
     try {
       const ai = new GoogleGenAI({ apiKey: activeKey });
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: model,
-          contents: [
-            {
-              text: 'Bạn là chuyên gia giáo dục Toán học Việt Nam. Hãy phản hồi ngắn gọn đúng một câu: "Kết nối Gemini API thành công! Sẵn sàng hỗ trợ giáo viên và học sinh Toán THCS."'
-            }
-          ]
-        });
-      } catch (genErr: any) {
-        const errStr = String(genErr?.message || genErr);
-        if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available') || errStr.includes('2.5')) {
-          model = 'gemini-3.8-flash';
-          this.setModel(model);
-          response = await ai.models.generateContent({
-            model: model,
-            contents: [
-              {
-                text: 'Bạn là chuyên gia giáo dục Toán học Việt Nam. Hãy phản hồi ngắn gọn đúng một câu: "Kết nối Gemini API thành công! Sẵn sàng hỗ trợ giáo viên và học sinh Toán THCS."'
-              }
-            ]
-          });
-        } else {
-          throw genErr;
-        }
-      }
+      const { response, modelUsed } = await this.generateWithFailover(
+        ai,
+        model,
+        [
+          {
+            text: 'Bạn là chuyên gia giáo dục Toán học Việt Nam. Hãy phản hồi ngắn gọn đúng một câu: "Kết nối Gemini API thành công! Sẵn sàng hỗ trợ giáo viên và học sinh Toán THCS."'
+          }
+        ]
+      );
 
       const responseText = response.text || '';
       return {
         success: true,
         message: responseText.trim() || 'Kết nối Gemini API thành công!',
-        modelUsed: model
+        modelUsed: modelUsed
       };
     } catch (error: any) {
       console.error('Gemini API Connection Test Error:', error);
@@ -926,25 +971,10 @@ YÊU CẦU BẮT BUỘC:
   }
 ]
 `;
-          let response;
-          try {
-            response = await ai.models.generateContent({
-              model: model,
-              contents: [{ text: prompt }]
-            });
-          } catch (modelErr: any) {
-            const errStr = String(modelErr?.message || modelErr);
-            if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available') || errStr.includes('2.5')) {
-              console.warn('Model cũ không khả dụng, tự động nâng cấp sang gemini-3.8-flash:', modelErr);
-              model = 'gemini-3.8-flash';
-              this.setModel(model);
-              response = await ai.models.generateContent({
-                model: model,
-                contents: [{ text: prompt }]
-              });
-            } else {
-              throw modelErr;
-            }
+          const { response, modelUsed } = await this.generateWithFailover(ai, model, [{ text: prompt }]);
+          if (modelUsed !== model) {
+            model = modelUsed;
+            this.setModel(modelUsed);
           }
 
           const text = response.text || '';
@@ -1030,25 +1060,7 @@ Trả về JSON duy nhất:
   "explanation": "Các bước giải ngắn gọn, chuẩn mực..."
 }
 `;
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: model,
-            contents: [{ text: prompt }]
-          });
-        } catch (singleErr: any) {
-          const errStr = String(singleErr?.message || singleErr);
-          if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available') || errStr.includes('2.5')) {
-            model = 'gemini-3.8-flash';
-            this.setModel(model);
-            response = await ai.models.generateContent({
-              model: model,
-              contents: [{ text: prompt }]
-            });
-          } else {
-            throw singleErr;
-          }
-        }
+        const { response } = await this.generateWithFailover(ai, model, [{ text: prompt }]);
         const text = (response.text || '').replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {

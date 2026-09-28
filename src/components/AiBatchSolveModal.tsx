@@ -181,8 +181,8 @@ export const AiBatchSolveModal: React.FC<AiBatchSolveModalProps> = ({
         setItems([...localItems]);
       }
 
-      // Small throttle pause between exams to prevent hitting API rate limits
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Small throttle pause between exams to prevent hitting API rate limits and 503 spikes
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     setIsRunning(false);
