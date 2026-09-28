@@ -952,6 +952,41 @@ Trả về JSON duy nhất:
   }
 
   /**
+   * Trích xuất chữ cái đáp án A, B, C, D an toàn, chống việc AI trả về 'Đáp án B', 'B.', '**C**' v.v.
+   */
+  private extractValidAnswerLetter(raw: any, options?: { id: string; text: string }[]): string {
+    if (!raw) return 'A';
+    const str = String(raw).trim();
+    // 1. Khớp chính xác 1 ký tự A, B, C, D
+    if (/^[ABCD]$/i.test(str)) {
+      return str.toUpperCase();
+    }
+    // 2. Khớp dạng 'A.', 'A:', 'Đáp án A', 'Phương án A', 'Chọn A', '(A)', '**A**'
+    const prefixMatch = str.match(/(?:^|[\s(:\-\*\[])(?:ĐÁP\s*ÁN|PHƯƠNG\s*ÁN|CHỌN|CÂU)?\s*([A-D])(?:\.|\:|\)|\s|\*|\]|$)/i);
+    if (prefixMatch) {
+      return prefixMatch[1].toUpperCase();
+    }
+    // 3. Khớp bất kỳ chữ cái A-D đứng riêng biệt
+    const standaloneMatch = str.match(/\b([A-D])\b/i);
+    if (standaloneMatch) {
+      return standaloneMatch[1].toUpperCase();
+    }
+    // 4. Nếu AI trả về nội dung của phương án thay vì chữ cái (VD: AI trả về "15 cm" khớp với text của phương án B)
+    if (options && options.length > 0) {
+      const rawClean = str.toLowerCase();
+      for (const opt of options) {
+        if (opt.text) {
+          const optClean = opt.text.toLowerCase().trim();
+          if (optClean && (optClean === rawClean || rawClean.includes(optClean))) {
+            return opt.id.toUpperCase();
+          }
+        }
+      }
+    }
+    return 'A';
+  }
+
+  /**
    * AI Tự động giải đề & Lập bảng đáp án chuẩn cho danh sách câu hỏi
    * (Kèm thẩm định kép Dual-Pass & Thử nghiệm ngược Back-Substitution)
    */
@@ -974,6 +1009,10 @@ Trả về JSON duy nhất:
     if (!questions || questions.length === 0) return [];
 
     const apiKey = this.getApiKey();
+    if (!apiKey) {
+      throw new Error('Chưa cấu hình Gemini API Key. Thầy/Cô vui lòng nhập API Key để kích hoạt Trợ lý AI Giải & Thẩm định đề.');
+    }
+
     const results: Array<{
       questionId: string;
       order: number;
@@ -988,40 +1027,41 @@ Trả về JSON duy nhất:
     // Chỉ giải các câu trắc nghiệm hoặc có các phương án
     const mcqQuestions = questions.filter(q => q.type === 'multiple_choice' || (q.options && q.options.length >= 2));
 
-    if (apiKey) {
-      const ai = new GoogleGenAI({ apiKey });
-      let model = this.getModel();
-      const BATCH_SIZE = 8; // Tách từng đợt 8 câu để đảm bảo Gemini tính toán sâu và không bị giới hạn token
+    const ai = new GoogleGenAI({ apiKey });
+    let model = this.getModel();
+    const BATCH_SIZE = 4; // Tách từng đợt 4 câu để Gemini tính toán chuyên sâu, không bị vượt giới hạn token
 
-      for (let i = 0; i < mcqQuestions.length; i += BATCH_SIZE) {
-        const batch = mcqQuestions.slice(i, i + BATCH_SIZE);
-        if (onProgress) {
-          onProgress(Math.min(i + batch.length, mcqQuestions.length), mcqQuestions.length);
-        }
+    for (let i = 0; i < mcqQuestions.length; i += BATCH_SIZE) {
+      const batch = mcqQuestions.slice(i, i + BATCH_SIZE);
+      if (onProgress) {
+        onProgress(Math.min(i + batch.length, mcqQuestions.length), mcqQuestions.length);
+      }
 
-        try {
-          const prompt = `
-Bạn là Giám khảo & Chuyên gia giải đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, bám sát chuẩn SGK Toán 6, 7, 8, 9 bộ sách "Kết nối tri thức với cuộc sống").
-Nhiệm vụ: Giải và THẨM ĐỊNH ĐỘC LẬP 2 LẦN để tìm đáp án đúng tuyệt đối ('A', 'B', 'C' hoặc 'D') cho từng câu hỏi sau.
+      try {
+        const prompt = `
+Bạn là Giám khảo & Chuyên gia giải đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, SGK Kết nối tri thức).
+Nhiệm vụ: Giải và THẨM ĐỊNH ĐỘC LẬP 2 LẦN cho từng câu hỏi sau đây để tìm đáp án đúng tuyệt đối ('A', 'B', 'C' hoặc 'D').
 
-QUY TRÌNH THẨM ĐỊNH KÉP BẮT BUỘC CHO MỖI CÂU:
-1. LƯỢT 1 (Giải toán trực tiếp): Suy luận từ giả thiết đề bài, thực hiện từng bước tính toán đại số / hình học -> Ra đáp án 'pass1' ('A', 'B', 'C' hoặc 'D').
-2. LƯỢT 2 (Thử nghiệm ngược / Kiểm chứng độc lập):
-   - Thay ngược giá trị của 'pass1' vào phương trình / điều kiện đề bài xem có thỏa mãn 100% không.
-   - Kiểm tra xem 3 phương án còn lại có trường hợp nào gây bẫy hoặc là đáp án đúng hơn không -> Ra đáp án 'pass2'.
-3. ĐÁNH GIÁ ĐỘ TIN CẬY:
-   - Nếu pass1 trùng khớp pass2 -> confidence = "high" (Tin cậy cao, trùng khớp 100%).
-   - Nếu pass1 khác pass2 -> confidence = "needs_review" (Có nghi vấn, đề xuất giáo viên xem lại).
-   - 'correctAnswer': Chọn đáp án có căn cứ toán học chắc chắn nhất sau khi thử ngược.
-   - 'sanityCheckNote': 1 câu giải thích ngắn gọn kết quả kiểm chứng (VD: "Thử x = 3 vào đề bài ta được 2 vế đều bằng 7, thỏa mãn tuyệt đối.").
+QUY TRÌNH THẨM ĐỊNH KÉP BẮT BUỘC:
+1. LƯỢT 1 (pass1): Tự giải toán trực tiếp từ đề bài, tính toán đại số/hình học từng bước -> ra phương án (A, B, C hoặc D).
+2. LƯỢT 2 (pass2): Thử nghiệm ngược (thay số phương án vào đề) hoặc dùng cách giải khác độc lập -> ra phương án (A, B, C hoặc D).
+3. ĐÁNH GIÁ:
+   - Nếu pass1 trùng khớp pass2: confidence = "high", correctAnswer = pass1.
+   - Nếu pass1 khác pass2: confidence = "needs_review", correctAnswer = phương án có bằng chứng thử ngược vững chắc hơn.
+   - sanityCheckNote: 1 câu đối soát ngắn gọn (VD: "Thử ngược x=3 vào đề bài thỏa mãn 100%").
+   - explanation: Lời giải chi tiết sư phạm, từng bước rõ ràng.
+
+QUY TẮC CỰC KỲ QUAN TRỌNG:
+- CÁC CÂU HỎI KHÁC NHAU CÓ ĐÁP ÁN KHÁC NHAU. TUYỆT ĐỐI KHÔNG CHỌN CÙNG MỘT ĐÁP ÁN (NHƯ TOÀN 'A') CHO CÁC CÂU. PHẢI TÍNH TOÁN CẨN THẬN TỪNG BÀI TOÁN.
+- Trường 'questionId' PHẢI LẤY CHÍNH XÁC từ giá trị [Mã: ...] của câu hỏi tương ứng.
+- 'pass1', 'pass2', 'correctAnswer' CHỈ LÀ 1 CHỮ CÁI DUY NHẤT: 'A', 'B', 'C' hoặc 'D'.
 
 THÔNG TIN ĐỀ THI:
-- Khối lớp: Toán ${grade}
-- Chủ đề: ${topic}
+- Khối lớp: Toán ${grade} | Chủ đề: ${topic}
 
-DANH SÁCH CÂU HỎI CẦN GIẢI:
+DANH SÁCH CÂU HỎI CẦN GIẢI TRONG ĐỢT NÀY:
 ${batch.map((q, idx) => `
-[CÂU ${q.order || i + idx + 1}] (Mã: ${q.id})
+[Mã: ${q.id}] (Câu ${q.order || i + idx + 1})
 Đề bài: ${q.question}
 Các phương án:
 ${(q.options || []).map(o => `  ${o.id}. ${o.text}`).join('\n')}
@@ -1030,77 +1070,96 @@ ${(q.options || []).map(o => `  ${o.id}. ${o.text}`).join('\n')}
 Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\`json):
 [
   {
-    "questionId": "id câu",
-    "order": 1,
-    "pass1": "A",
-    "pass2": "A",
+    "questionId": "${batch[0]?.id || 'q_id'}",
+    "order": ${batch[0]?.order || i + 1},
+    "pass1": "A hoặc B hoặc C hoặc D",
+    "pass2": "A hoặc B hoặc C hoặc D",
     "confidence": "high",
-    "correctAnswer": "A",
-    "sanityCheckNote": "Thử ngược kết quả vào đề bài thỏa mãn 100%.",
+    "correctAnswer": "A hoặc B hoặc C hoặc D",
+    "sanityCheckNote": "Giải thích kết quả thử ngược...",
     "explanation": "Các bước giải chi tiết, chuẩn mực sư phạm..."
   }
 ]
 `;
-          const { response, modelUsed } = await this.generateWithFailover(ai, model, [{ text: prompt }], { temperature: 0.1 });
-          if (modelUsed !== model) {
-            model = modelUsed;
-            this.setModel(modelUsed);
-          }
+        const { response, modelUsed } = await this.generateWithFailover(ai, model, [{ text: prompt }], { temperature: 0.1 });
+        if (modelUsed !== model) {
+          model = modelUsed;
+          this.setModel(modelUsed);
+        }
 
-          const text = response.text || '';
-          const cleanJson = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
-          const jsonMatch = cleanJson.match(/\[[\s\S]*\]/);
+        const text = response.text || '';
+        const cleanJson = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+        const jsonMatch = cleanJson.match(/\[[\s\S]*\]/);
 
-          if (jsonMatch) {
-            const parsedList = JSON.parse(jsonMatch[0]);
-            if (Array.isArray(parsedList)) {
-              parsedList.forEach((item: any) => {
-                const targetQ = batch.find(bq => bq.id === item.questionId || bq.order === item.order);
-                const validLetter = ['A', 'B', 'C', 'D'].includes(String(item.correctAnswer).toUpperCase())
-                  ? String(item.correctAnswer).toUpperCase()
-                  : 'A';
-                const pass1 = ['A', 'B', 'C', 'D'].includes(String(item.pass1).toUpperCase())
-                  ? String(item.pass1).toUpperCase()
-                  : validLetter;
-                const pass2 = ['A', 'B', 'C', 'D'].includes(String(item.pass2).toUpperCase())
-                  ? String(item.pass2).toUpperCase()
-                  : validLetter;
-                const confidence: 'high' | 'medium' | 'needs_review' = (item.confidence === 'needs_review' || pass1 !== pass2)
-                  ? 'needs_review'
-                  : 'high';
+        if (jsonMatch) {
+          const parsedList = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsedList)) {
+            parsedList.forEach((item: any, pIdx: number) => {
+              const targetQ = batch.find(bq => bq.id === item.questionId)
+                || batch.find(bq => String(bq.order) === String(item.order))
+                || (typeof item.order === 'number' && item.order >= 1 && item.order <= batch.length ? batch[item.order - 1] : undefined)
+                || batch[pIdx];
 
-                results.push({
-                  questionId: targetQ ? targetQ.id : (item.questionId || `q_${item.order}`),
-                  order: item.order || (targetQ ? targetQ.order : 1),
-                  correctAnswer: validLetter,
-                  explanation: item.explanation || 'Đã được giải bằng AI Toán THCS.',
-                  confidence,
-                  pass1Answer: pass1,
-                  pass2Answer: pass2,
-                  sanityCheckNote: item.sanityCheckNote || (confidence === 'high' ? 'Đã thử ngược kết quả, trùng khớp 100%.' : `Nghi vấn giữa ${pass1} và ${pass2}, cần giáo viên xác nhận.`)
-                });
+              if (!targetQ) return;
+
+              const pass1 = this.extractValidAnswerLetter(item.pass1, targetQ.options);
+              const pass2 = this.extractValidAnswerLetter(item.pass2, targetQ.options);
+              const rawAns = item.correctAnswer ? this.extractValidAnswerLetter(item.correctAnswer, targetQ.options) : pass1;
+
+              const confidence: 'high' | 'medium' | 'needs_review' = (item.confidence === 'needs_review' || pass1 !== pass2)
+                ? 'needs_review'
+                : 'high';
+
+              results.push({
+                questionId: targetQ.id,
+                order: targetQ.order,
+                correctAnswer: rawAns,
+                explanation: item.explanation || 'Đã được giải chi tiết bằng AI Toán THCS.',
+                confidence,
+                pass1Answer: pass1,
+                pass2Answer: pass2,
+                sanityCheckNote: item.sanityCheckNote || (confidence === 'high' ? `Đã thử ngược kết quả (${pass1}), trùng khớp 100%.` : `Phát hiện nghi vấn giữa Lượt 1 (${pass1}) và Lượt 2 (${pass2}), cần giáo viên xem xét.`)
               });
-            }
+            });
           }
-        } catch (batchErr) {
-          console.warn('Lỗi khi AI giải đợt câu hỏi:', batchErr);
-          // Fallback cho đợt này
-          batch.forEach((q) => {
-            if (!results.some(r => r.questionId === q.id)) {
-              results.push(this.fallbackSolveSingleQuestion(q));
-            }
-          });
+        }
+      } catch (batchErr) {
+        console.warn('Lỗi khi AI giải đợt câu hỏi:', batchErr);
+      }
+
+      // Đối với các câu trong batch chưa có trong results (do JSON parse hỏng hoặc lỗi mạng):
+      // Thử giải đơn lẻ từng câu để đảm bảo không bị thiếu hoặc default sai
+      for (const q of batch) {
+        if (!results.some(r => r.questionId === q.id)) {
+          try {
+            const singleRes = await this.solveSingleQuestion({ question: q, grade, topic });
+            results.push({
+              questionId: q.id,
+              order: q.order,
+              correctAnswer: singleRes.correctAnswer,
+              explanation: singleRes.explanation,
+              confidence: singleRes.confidence || 'high',
+              pass1Answer: singleRes.pass1Answer,
+              pass2Answer: singleRes.pass2Answer,
+              sanityCheckNote: singleRes.sanityCheckNote
+            });
+          } catch (singleErr) {
+            results.push({
+              questionId: q.id,
+              order: q.order,
+              correctAnswer: q.correctAnswer || (q.options && q.options[0]?.id) || 'A',
+              explanation: q.explanation || 'Chưa thể tự động giải câu này, Thầy/Cô vui lòng nhập đáp án.',
+              confidence: 'needs_review',
+              pass1Answer: q.correctAnswer || 'A',
+              pass2Answer: '?',
+              sanityCheckNote: 'AI chưa thể giải câu này trong đợt quét. Cần Thầy/Cô kiểm tra.'
+            });
+          }
         }
       }
-    } else {
-      // Fallback khi chưa có API key
-      mcqQuestions.forEach((q, idx) => {
-        results.push(this.fallbackSolveSingleQuestion(q));
-        if (onProgress) onProgress(idx + 1, mcqQuestions.length);
-      });
     }
 
-    // Đảm bảo tất cả các câu đều có kết quả
+    // Đảm bảo tất cả các câu (kể cả câu tự luận) đều có kết quả
     questions.forEach((q) => {
       if (!results.some(r => r.questionId === q.id)) {
         results.push({
@@ -1140,19 +1199,16 @@ Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\
         const ai = new GoogleGenAI({ apiKey });
         let model = this.getModel();
         const prompt = `
-Bạn là Giám khảo & Chuyên gia thẩm định đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, bám sát SGK Kết nối tri thức).
+Bạn là Giám khảo & Chuyên gia thẩm định đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, SGK Kết nối tri thức).
 Nhiệm vụ: Giải và THẨM ĐỊNH ĐỘC LẬP 2 LẦN để tìm đáp án đúng tuyệt đối ('A', 'B', 'C' hoặc 'D') cho câu hỏi sau.
 
 QUY TRÌNH THẨM ĐỊNH KÉP BẮT BUỘC:
-1. LƯỢT 1 (Giải toán trực tiếp): Suy luận từ giả thiết đề bài, biến đổi logic/đại số/hình học -> Ra đáp án 'pass1' ('A', 'B', 'C' hoặc 'D').
-2. LƯỢT 2 (Thử nghiệm ngược / Kiểm chứng độc lập):
-   - Thay ngược giá trị của 'pass1' vào phương trình / điều kiện đề bài xem có thỏa mãn 100% không.
-   - Kiểm tra các phương án còn lại để loại trừ khả năng bẫy hoặc nghiệm ngoại lai -> Ra đáp án 'pass2'.
+1. LƯỢT 1 (pass1): Suy luận từ giả thiết đề bài, biến đổi logic/đại số/hình học -> Ra đáp án (A, B, C hoặc D).
+2. LƯỢT 2 (pass2): Thử nghiệm ngược vào phương trình/điều kiện đề bài hoặc giải bằng cách khác -> Ra đáp án (A, B, C hoặc D).
 3. ĐÁNH GIÁ ĐỘ TIN CẬY:
-   - Nếu pass1 trùng khớp pass2 -> confidence = "high"
-   - Nếu pass1 khác pass2 -> confidence = "needs_review"
-   - 'correctAnswer': Đáp án chắc chắn nhất sau khi thử nghiệm ngược.
-   - 'sanityCheckNote': 1 câu giải thích ngắn gọn kết quả thử ngược (VD: "Thay x = 2 vào biểu thức thấy hai vế bằng nhau, chuẩn xác.").
+   - Nếu pass1 trùng khớp pass2 -> confidence = "high", correctAnswer = pass1
+   - Nếu pass1 khác pass2 -> confidence = "needs_review", correctAnswer = phương án có bằng chứng thử nghiệm ngược vững chắc hơn
+   - sanityCheckNote: 1 câu giải thích ngắn gọn kết quả thử ngược (VD: "Thay x = 2 vào biểu thức thấy hai vế bằng nhau, chuẩn xác.").
 
 THÔNG TIN ĐỀ THI:
 - Khối lớp: Toán ${grade} | Chủ đề: ${topic}
@@ -1160,12 +1216,15 @@ THÔNG TIN ĐỀ THI:
 - Các phương án:
 ${(question.options || []).map(o => `  ${o.id}. ${o.text}`).join('\n')}
 
+QUY TẮC BẮT BUỘC:
+- 'pass1', 'pass2', 'correctAnswer' CHỈ LÀ 1 CHỮ CÁI DUY NHẤT: 'A', 'B', 'C' hoặc 'D'.
+
 Trả về DUY NHẤT một JSON thuần túy (không kèm markdown \`\`\`json):
 {
-  "pass1": "A",
-  "pass2": "A",
+  "pass1": "A hoặc B hoặc C hoặc D",
+  "pass2": "A hoặc B hoặc C hoặc D",
   "confidence": "high",
-  "correctAnswer": "A",
+  "correctAnswer": "A hoặc B hoặc C hoặc D",
   "sanityCheckNote": "Thử ngược kết quả vào đề bài thỏa mãn 100%.",
   "explanation": "Các bước giải chi tiết, chuẩn mực sư phạm..."
 }
@@ -1175,15 +1234,10 @@ Trả về DUY NHẤT một JSON thuần túy (không kèm markdown \`\`\`json):
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          const validAns = ['A', 'B', 'C', 'D'].includes(String(parsed.correctAnswer).toUpperCase())
-            ? String(parsed.correctAnswer).toUpperCase()
-            : 'A';
-          const pass1 = ['A', 'B', 'C', 'D'].includes(String(parsed.pass1).toUpperCase())
-            ? String(parsed.pass1).toUpperCase()
-            : validAns;
-          const pass2 = ['A', 'B', 'C', 'D'].includes(String(parsed.pass2).toUpperCase())
-            ? String(parsed.pass2).toUpperCase()
-            : validAns;
+          const pass1 = this.extractValidAnswerLetter(parsed.pass1, question.options);
+          const pass2 = this.extractValidAnswerLetter(parsed.pass2, question.options);
+          const validAns = parsed.correctAnswer ? this.extractValidAnswerLetter(parsed.correctAnswer, question.options) : pass1;
+
           const confidence: 'high' | 'medium' | 'needs_review' = (parsed.confidence === 'needs_review' || pass1 !== pass2)
             ? 'needs_review'
             : 'high';
@@ -1194,7 +1248,7 @@ Trả về DUY NHẤT một JSON thuần túy (không kèm markdown \`\`\`json):
             confidence,
             pass1Answer: pass1,
             pass2Answer: pass2,
-            sanityCheckNote: parsed.sanityCheckNote || (confidence === 'high' ? 'Đã thử ngược kết quả, trùng khớp 100%.' : `Nghi vấn giữa ${pass1} và ${pass2}, cần giáo viên xác nhận.`)
+            sanityCheckNote: parsed.sanityCheckNote || (confidence === 'high' ? `Đã thử ngược kết quả (${pass1}), trùng khớp 100%.` : `Nghi vấn giữa Lượt 1 (${pass1}) và Lượt 2 (${pass2}), cần giáo viên xác nhận.`)
           };
         }
       } catch (err) {
@@ -1205,10 +1259,10 @@ Trả về DUY NHẤT một JSON thuần túy (không kèm markdown \`\`\`json):
     const fallback = this.fallbackSolveSingleQuestion(question);
     return {
       ...fallback,
-      confidence: 'high',
+      confidence: 'needs_review',
       pass1Answer: fallback.correctAnswer,
       pass2Answer: fallback.correctAnswer,
-      sanityCheckNote: 'Phân tích chuẩn SGK Kết nối tri thức.'
+      sanityCheckNote: 'Chưa thể kết nối Gemini API để đối soát. Vui lòng kiểm tra API Key.'
     };
   }
 

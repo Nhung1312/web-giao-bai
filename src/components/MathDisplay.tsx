@@ -4,6 +4,9 @@ import 'katex/dist/katex.min.css';
 
 interface MathDisplayProps {
   text?: string | null;
+  content?: string | null;
+  math?: string | null;
+  children?: React.ReactNode;
   className?: string;
   inline?: boolean;
 }
@@ -18,21 +21,25 @@ interface MathDisplayProps {
  */
 export const MathDisplay: React.FC<MathDisplayProps> = ({ 
   text, 
+  content,
+  math,
+  children,
   className = '',
   inline = false 
 }) => {
-  if (!text || typeof text !== 'string') return null;
+  const rawText = text ?? content ?? math ?? (typeof children === 'string' ? children : '');
+  if (!rawText || typeof rawText !== 'string') return null;
 
   if (inline) {
     return (
       <span className={`inline-math-container text-inherit font-normal ${className}`}>
-        {renderInlineContent(text)}
+        {renderInlineContent(rawText)}
       </span>
     );
   }
 
   // Split lines
-  const lines = text.split(/\r?\n/);
+  const lines = rawText.split(/\r?\n/);
 
   return (
     <div className={`math-display-container text-inherit leading-relaxed break-words ${className}`}>
