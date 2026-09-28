@@ -127,7 +127,7 @@ const STORAGE_KEYS = {
 };
 
 export class HybridAIService implements IAIService {
-  private defaultModel = 'gemini-2.5-flash';
+  private defaultModel = 'gemini-3.8-flash';
 
   getApiKey(): string | null {
     try {
@@ -170,7 +170,15 @@ export class HybridAIService implements IAIService {
   getModel(): string {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.GEMINI_MODEL);
-      if (stored && stored.trim()) return stored.trim();
+      if (stored && stored.trim()) {
+        const val = stored.trim();
+        // Tự động nâng cấp các model đã bị Google deprecated (2.5, 1.5, 2.0) lên gemini-3.8-flash
+        if (val.includes('2.5') || val.includes('1.5') || val.includes('2.0') || val === 'gemini-pro') {
+          this.setModel('gemini-3.8-flash');
+          return 'gemini-3.8-flash';
+        }
+        return val;
+      }
     } catch {
       // fallback
     }
@@ -214,17 +222,36 @@ export class HybridAIService implements IAIService {
       };
     }
 
-    const model = this.getModel();
+    let model = this.getModel();
     try {
       const ai = new GoogleGenAI({ apiKey: activeKey });
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: [
-          {
-            text: 'Bạn là chuyên gia giáo dục Toán học Việt Nam. Hãy phản hồi ngắn gọn đúng một câu: "Kết nối Gemini API thành công! Sẵn sàng hỗ trợ giáo viên và học sinh Toán THCS."'
-          }
-        ]
-      });
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: model,
+          contents: [
+            {
+              text: 'Bạn là chuyên gia giáo dục Toán học Việt Nam. Hãy phản hồi ngắn gọn đúng một câu: "Kết nối Gemini API thành công! Sẵn sàng hỗ trợ giáo viên và học sinh Toán THCS."'
+            }
+          ]
+        });
+      } catch (genErr: any) {
+        const errStr = String(genErr?.message || genErr);
+        if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available') || errStr.includes('2.5')) {
+          model = 'gemini-3.8-flash';
+          this.setModel(model);
+          response = await ai.models.generateContent({
+            model: model,
+            contents: [
+              {
+                text: 'Bạn là chuyên gia giáo dục Toán học Việt Nam. Hãy phản hồi ngắn gọn đúng một câu: "Kết nối Gemini API thành công! Sẵn sàng hỗ trợ giáo viên và học sinh Toán THCS."'
+              }
+            ]
+          });
+        } else {
+          throw genErr;
+        }
+      }
 
       const responseText = response.text || '';
       return {
@@ -859,7 +886,7 @@ Trả về JSON duy nhất:
 
     if (apiKey) {
       const ai = new GoogleGenAI({ apiKey });
-      const model = this.getModel();
+      let model = this.getModel();
       const BATCH_SIZE = 8; // Tách từng đợt 8 câu để đảm bảo Gemini tính toán sâu và không bị giới hạn token
 
       for (let i = 0; i < mcqQuestions.length; i += BATCH_SIZE) {
@@ -899,10 +926,26 @@ YÊU CẦU BẮT BUỘC:
   }
 ]
 `;
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: [{ text: prompt }]
-          });
+          let response;
+          try {
+            response = await ai.models.generateContent({
+              model: model,
+              contents: [{ text: prompt }]
+            });
+          } catch (modelErr: any) {
+            const errStr = String(modelErr?.message || modelErr);
+            if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available') || errStr.includes('2.5')) {
+              console.warn('Model cũ không khả dụng, tự động nâng cấp sang gemini-3.8-flash:', modelErr);
+              model = 'gemini-3.8-flash';
+              this.setModel(model);
+              response = await ai.models.generateContent({
+                model: model,
+                contents: [{ text: prompt }]
+              });
+            } else {
+              throw modelErr;
+            }
+          }
 
           const text = response.text || '';
           const cleanJson = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
@@ -973,7 +1016,7 @@ YÊU CẦU BẮT BUỘC:
     if (apiKey) {
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const model = this.getModel();
+        let model = this.getModel();
         const prompt = `
 Bạn là Giám khảo Toán THCS Việt Nam. Hãy giải câu hỏi sau và chỉ ra phương án đúng (A, B, C, D) kèm lời giải:
 Lớp: Toán ${grade} | Chủ đề: ${topic}
@@ -987,10 +1030,25 @@ Trả về JSON duy nhất:
   "explanation": "Các bước giải ngắn gọn, chuẩn mực..."
 }
 `;
-        const response = await ai.models.generateContent({
-          model: model,
-          contents: [{ text: prompt }]
-        });
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model: model,
+            contents: [{ text: prompt }]
+          });
+        } catch (singleErr: any) {
+          const errStr = String(singleErr?.message || singleErr);
+          if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('no longer available') || errStr.includes('2.5')) {
+            model = 'gemini-3.8-flash';
+            this.setModel(model);
+            response = await ai.models.generateContent({
+              model: model,
+              contents: [{ text: prompt }]
+            });
+          } else {
+            throw singleErr;
+          }
+        }
         const text = (response.text || '').replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {

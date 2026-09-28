@@ -36,7 +36,7 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, o
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
   const [savedKeySuccess, setSavedKeySuccess] = useState<boolean>(false);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.8-flash');
   const [autoGradeEnabled, setAutoGradeEnabled] = useState<boolean>(true);
   
   // Test connection state
@@ -86,7 +86,12 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, o
   useEffect(() => {
     const loadSettings = async () => {
       let currentKey = hybridAi.getApiKey() || '';
-      let currentModel = hybridAi.getModel() || 'gemini-2.5-flash';
+      let currentModel = hybridAi.getModel() || 'gemini-3.8-flash';
+      // Tự động nâng cấp model cũ nếu profile lưu model không còn hỗ trợ
+      if (currentModel.includes('2.5') || currentModel.includes('1.5') || currentModel.includes('2.0')) {
+        currentModel = 'gemini-3.8-flash';
+        hybridAi.setModel(currentModel);
+      }
       let autoGrade = hybridAi.isAutoGradeEnabled();
 
       // Nếu chưa có trên máy này, đọc từ tài khoản Firestore của giáo viên
@@ -302,9 +307,9 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({ onResetData, o
                 onChange={(e) => setSelectedModel(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Khuyên dùng - Nhanh, chuẩn Toán & đọc ảnh bài làm)</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Chuyên sâu hình học & suy luận Toán THCS)</option>
-                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Mô hình tư duy Toán nâng cao)</option>
+                <option value="gemini-3.8-flash">Gemini 3.8 Flash (Mới nhất - Chuẩn Toán THCS & Siêu nhanh)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Chuyên sâu hình học & suy luận Toán THCS nâng cao)</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Tiết kiệm hạn mức API)</option>
               </select>
             </div>
 
