@@ -421,6 +421,14 @@ function AppContent() {
             element={<StudentJoinPage onStartExam={handleStartExam} />}
           />
           <Route
+            path="/practice"
+            element={<StudentJoinPage initialTab="ai_practice" onStartExam={handleStartExam} />}
+          />
+          <Route
+            path="/ai-practice"
+            element={<StudentJoinPage initialTab="ai_practice" onStartExam={handleStartExam} />}
+          />
+          <Route
             path="/join/:code"
             element={<StudentJoinPage onStartExam={handleStartExam} />}
           />

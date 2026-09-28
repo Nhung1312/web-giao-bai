@@ -3,6 +3,7 @@ import { useSearchParams, useParams } from 'react-router-dom';
 import { StorageService } from '../../services/storageService';
 import { FirestoreService } from '../../services/firestoreService';
 import { Assignment, ClassRoom } from '../../types';
+import { StudentAiPracticeView } from '../../components/StudentAiPracticeView';
 import { 
   ArrowRight, 
   Clock, 
@@ -26,13 +27,15 @@ import {
 
 interface StudentJoinPageProps {
   initialCode?: string;
+  initialTab?: 'enter_code' | 'browse_exams' | 'ai_practice';
   onStartExam: (assignment: Assignment, studentName: string, classId: string, className: string) => void;
 }
 
-export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = '', onStartExam }) => {
+export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = '', initialTab, onStartExam }) => {
   const [searchParams] = useSearchParams();
   const { code: paramCode } = useParams<{ code?: string }>();
   const queryCode = searchParams.get('code') || paramCode || initialCode;
+  const queryTab = searchParams.get('tab') as ('enter_code' | 'browse_exams' | 'ai_practice' | null);
   
   const [code, setCode] = useState(queryCode);
   const [studentName, setStudentName] = useState(() => {
@@ -57,7 +60,12 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
   const [recentAssignments, setRecentAssignments] = useState<Assignment[]>([]);
 
   // Search & Filter state for exam browser
-  const [activeTab, setActiveTab] = useState<'enter_code' | 'browse_exams'>('enter_code');
+  const [activeTab, setActiveTab] = useState<'enter_code' | 'browse_exams' | 'ai_practice'>(() => {
+    if (initialTab) return initialTab;
+    if (queryTab === 'ai_practice') return 'ai_practice';
+    if (queryTab === 'browse_exams') return 'browse_exams';
+    return 'enter_code';
+  });
   const [examSearch, setExamSearch] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedTopicType, setSelectedTopicType] = useState<string>('all');
@@ -274,10 +282,33 @@ export const StudentJoinPage: React.FC<StudentJoinPageProps> = ({ initialCode = 
             <BookOpen className="w-3.5 h-3.5" />
             <span>2. Kho đề tự luyện ({recentAssignments.length})</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('ai_practice')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'ai_practice'
+                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xs'
+                : 'text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>3. AI Tạo đề ôn tập</span>
+          </button>
         </div>
       </div>
 
-      {activeTab === 'enter_code' ? (
+      {activeTab === 'ai_practice' ? (
+        <StudentAiPracticeView
+          classes={classes}
+          studentName={studentName}
+          setStudentName={setStudentName}
+          selectedClassId={selectedClassId}
+          setSelectedClassId={setSelectedClassId}
+          customClassName={customClassName}
+          setCustomClassName={setCustomClassName}
+          onStartExam={onStartExam}
+        />
+      ) : activeTab === 'enter_code' ? (
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-100 dark:border-slate-800">
           <form onSubmit={handleStart} className="space-y-5">
             {/* Step 1: Mã bài tập */}

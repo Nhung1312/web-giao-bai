@@ -46,12 +46,14 @@ export const GenerateSimilarExamModal: React.FC<GenerateSimilarExamModalProps> =
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [createdAssignment, setCreatedAssignment] = useState<Assignment | null>(null);
 
   const hasApiKey = aiService.hasApiKey();
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setProgress({ current: 0, total: assignment.questions.length });
     try {
       const targetClass = classes.find(c => c.id === selectedClassId);
       const options: GenerateVariantOptions = {
@@ -61,7 +63,10 @@ export const GenerateSimilarExamModal: React.FC<GenerateSimilarExamModalProps> =
         mode,
         shuffleQuestions,
         shuffleOptions,
-        newTitle: title
+        newTitle: title,
+        onProgress: (current, total) => {
+          setProgress({ current, total });
+        }
       };
 
       const newAsg = await ExamGeneratorService.generateVariantAssignment(assignment, options);
@@ -218,12 +223,12 @@ export const GenerateSimilarExamModal: React.FC<GenerateSimilarExamModalProps> =
                   >
                     <div className="flex items-center space-x-2 mb-1">
                       <Sparkles className="w-4 h-4 text-violet-600" />
-                      <span className="font-bold text-sm">AI sáng tạo mới</span>
+                      <span className="font-bold text-sm">AI sinh đề tương tự 1:1</span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      AI sinh bộ câu hỏi mới cùng dạng toán & chủ đề. 
+                      AI giữ nguyên dạng toán & cấu trúc từng câu của đề gốc, chỉ đổi số liệu toán học và lập đáp án chuẩn mới.
                       {hasApiKey ? (
-                        <strong className="text-violet-600 block mt-0.5">✓ Đã kết nối Gemini AI</strong>
+                        <strong className="text-violet-600 block mt-0.5">✓ Đã kết nối Gemini AI (Chuẩn ma trận 1:1)</strong>
                       ) : (
                         <span className="text-amber-600 block mt-0.5">⚡ Tự động dùng bộ tạo thông minh</span>
                       )}
@@ -258,13 +263,33 @@ export const GenerateSimilarExamModal: React.FC<GenerateSimilarExamModalProps> =
                   </span>
                 </label>
               </div>
+
+              {/* AI Generation Progress Bar */}
+              {isGenerating && mode === 'ai' && progress.total > 0 && (
+                <div className="p-3.5 bg-violet-50 dark:bg-violet-950/40 rounded-2xl border border-violet-100 dark:border-violet-800 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs font-bold text-violet-900 dark:text-violet-200 mb-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-violet-600 animate-pulse" />
+                      <span>AI đang biên soạn câu tương đương 1:1 theo đề gốc...</span>
+                    </span>
+                    <span>{progress.current}/{progress.total} câu</span>
+                  </div>
+                  <div className="w-full bg-violet-200 dark:bg-violet-900 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-violet-600 to-indigo-600 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end space-x-2.5 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={handleReset}
-                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                disabled={isGenerating}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
                 Hủy bỏ
               </button>
@@ -277,7 +302,11 @@ export const GenerateSimilarExamModal: React.FC<GenerateSimilarExamModalProps> =
                 {isGenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    <span>Đang khởi tạo đề...</span>
+                    <span>
+                      {mode === 'ai' && progress.total > 0
+                        ? `AI đang tạo (${progress.current}/${progress.total} câu)...`
+                        : 'Đang khởi tạo đề...'}
+                    </span>
                   </>
                 ) : (
                   <>

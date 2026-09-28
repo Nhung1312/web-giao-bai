@@ -6,6 +6,7 @@ import { PrintExamModal } from '../../components/PrintExamModal';
 import { GenerateSimilarExamModal } from '../../components/GenerateSimilarExamModal';
 import { AiSolveExamModal } from '../../components/AiSolveExamModal';
 import { AiBatchSolveModal } from '../../components/AiBatchSolveModal';
+import { TeacherSemesterExamModal } from '../../components/TeacherSemesterExamModal';
 import { FirestoreService } from '../../services/firestoreService';
 import { 
   BookOpen, 
@@ -81,6 +82,7 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
   const [printingAssignment, setPrintingAssignment] = useState<Assignment | null>(null);
   const [similarExamAssignment, setSimilarExamAssignment] = useState<Assignment | null>(null);
   const [aiSolvingAssignment, setAiSolvingAssignment] = useState<Assignment | null>(null);
+  const [showSemesterExamModal, setShowSemesterExamModal] = useState<boolean>(false);
 
   const handleCopyLink = async (assignmentCode: string) => {
     const link = getAssignmentShareLink(assignmentCode);
@@ -255,17 +257,24 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
             Tạo mã bài tập, quản lý ngân hàng câu hỏi, lọc theo lớp học và chủ đề Đại số / Hình học.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowSemesterExamModal(true)}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold rounded-xl shadow-md text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+            <span>Tạo đề Giữa kỳ / Cuối kỳ (4 Mã đề)</span>
+          </button>
           <button
             onClick={() => setShowFileUploadModal(true)}
-            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-xs text-sm transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-xs text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
           >
             <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Tải lên file (Excel/Word/PDF)</span>
           </button>
           <button
             onClick={() => onNavigate('create')}
-            className="inline-flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ Tạo bài mới</span>
@@ -900,6 +909,19 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
           }}
         />
       )}
+
+      {/* Teacher Semester Exam Modal (Tạo đề Giữa kỳ / Cuối kỳ 3 Tầng) */}
+      <TeacherSemesterExamModal
+        isOpen={showSemesterExamModal}
+        onClose={() => setShowSemesterExamModal(false)}
+        classes={safeClasses}
+        onExamsCreated={async () => {
+          await onRefresh();
+        }}
+        onOpenPrintModal={(exam) => {
+          setPrintingAssignment(exam);
+        }}
+      />
     </div>
   );
 };

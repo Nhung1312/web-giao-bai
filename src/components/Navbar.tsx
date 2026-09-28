@@ -111,6 +111,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onResetData, onClearDemoData }) 
               <Trophy className="w-3.5 h-3.5 text-amber-500" />
               <span>Thi Online</span>
             </Link>
+
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 my-auto mx-0.5" />
+
+            <Link
+              to="/practice"
+              className={`inline-flex items-center space-x-1 px-3 py-1 rounded-lg text-xs font-black transition-all ${
+                location.pathname === '/practice' || location.pathname === '/ai-practice'
+                  ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xs'
+                  : 'text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/60'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>AI Ôn Tập</span>
+            </Link>
           </div>
 
           {/* Actions & Role switchers */}

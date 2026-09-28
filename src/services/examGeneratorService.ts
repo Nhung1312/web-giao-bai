@@ -27,6 +27,7 @@ export interface GenerateVariantOptions {
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
   newTitle?: string;
+  onProgress?: (current: number, total: number) => void;
 }
 
 export class ExamGeneratorService {
@@ -134,23 +135,19 @@ export class ExamGeneratorService {
 
     if (mode === 'ai' && aiService.hasApiKey()) {
       try {
-        // Sử dụng Gemini AI để sinh các câu hỏi biến thể
-        const aiQuestions = await aiService.generateQuestions({
+        // Sử dụng Gemini AI để sinh các câu hỏi tương tự 1:1 theo từng câu hỏi gốc
+        const aiQuestions = await aiService.generateIsomorphicQuestions({
+          sourceQuestions: sourceAssignment.questions,
           grade: sourceAssignment.grade,
           topic: sourceAssignment.topic,
-          count: Math.min(sourceAssignment.questions.length, 10),
-          difficulty: 'Hỗn hợp'
+          onProgress: options.onProgress
         });
 
         if (aiQuestions && aiQuestions.length > 0) {
-          transformedQuestions = aiQuestions.map((q, idx) => ({
-            ...q,
-            order: idx + 1,
-            points: sourceAssignment.questions[idx]?.points || 1
-          }));
+          transformedQuestions = aiQuestions;
         }
       } catch (err) {
-        console.warn('Lỗi gọi AI sinh đề tương tự, tự động chuyển sang chế độ hoán vị số học:', err);
+        console.warn('Lỗi gọi AI sinh đề tương tự 1:1, tự động chuyển sang chế độ hoán vị an toàn:', err);
       }
     }
 

@@ -162,6 +162,32 @@ export const HomePage: React.FC<HomePageProps> = ({ assignments }) => {
               </div>
             </Link>
           </div>
+
+          {/* AI Practice Quick Launch Banner */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-xs">
+                <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black text-xs sm:text-sm">Góc Tự Luyện &amp; Ôn Tập Chuyên Đề AI</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black uppercase">Mới</span>
+                </div>
+                <p className="text-xs text-indigo-100 mt-0.5">
+                  Chọn lớp 6-9 và chuyên đề bất kỳ — AI tạo ngay đề trắc nghiệm kèm lời giải từng bước.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/practice"
+              className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 bg-white text-indigo-900 hover:bg-indigo-50 font-black text-xs sm:text-sm rounded-xl shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer"
+            >
+              <span>Ôn tập ngay</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
         {/* ========================================================================= */}

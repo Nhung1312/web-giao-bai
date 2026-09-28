@@ -31,6 +31,8 @@ export interface ExamBatchItem {
   status: 'pending' | 'solving' | 'completed' | 'error';
   errorMsg?: string;
   completedAt?: string;
+  verifiedCount?: number;
+  needsReviewCount?: number;
 }
 
 interface AiBatchSolveModalProps {
@@ -136,13 +138,28 @@ export const AiBatchSolveModal: React.FC<AiBatchSolveModalProps> = ({
         });
 
         // Merge solved answers into question list
+        let verifiedCount = 0;
+        let needsReviewCount = 0;
+
         const updatedQuestions: Question[] = questions.map((q) => {
           const found = solvedResults.find(r => r.questionId === q.id);
           if (found) {
+            const isNeedReview = found.confidence === 'needs_review' || (found.pass1Answer && found.pass2Answer && found.pass1Answer !== found.pass2Answer);
+            if (isNeedReview) {
+              needsReviewCount++;
+            } else {
+              verifiedCount++;
+            }
+
             return {
               ...q,
               correctAnswer: found.correctAnswer,
-              explanation: found.explanation || q.explanation
+              explanation: found.explanation || q.explanation,
+              verificationStatus: isNeedReview ? 'needs_review' : 'verified',
+              sanityCheckNote: found.sanityCheckNote,
+              confidence: found.confidence,
+              pass1Answer: found.pass1Answer,
+              pass2Answer: found.pass2Answer
             };
           }
           return q;
@@ -167,6 +184,8 @@ export const AiBatchSolveModal: React.FC<AiBatchSolveModalProps> = ({
           assignment: updatedAssignment,
           status: 'completed',
           solvedCount: solvedResults.length,
+          verifiedCount,
+          needsReviewCount,
           completedAt: new Date().toLocaleTimeString('vi-VN')
         };
         setItems([...localItems]);
@@ -399,10 +418,22 @@ export const AiBatchSolveModal: React.FC<AiBatchSolveModalProps> = ({
                   )}
 
                   {isCompleted && (
-                    <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Đã xong</span>
-                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Đã giải</span>
+                      </span>
+                      {item.needsReviewCount && item.needsReviewCount > 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[11px] font-bold" title="Có câu hỏi phát hiện sự khác biệt giữa giải xuôi và thử ngược">
+                          <span>{item.needsReviewCount} câu nghi vấn</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold" title="Đã thẩm định kép 2 vòng trùng khớp 100%">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span>Khớp 100%</span>
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {isError && (

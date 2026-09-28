@@ -41,6 +41,11 @@ export interface Question {
   rubric?: string; // Hướng dẫn / tiêu chí chấm tự luận cho AI và Giáo viên
   imageUrl?: string; // MỚI: Hình vẽ minh họa / đồ thị hình học cho đề bài (tải file hoặc dán Ctrl+V)
   dismissMissingImageWarning?: boolean; // Tùy chọn bỏ qua cảnh báo thiếu hình cho câu này
+  verificationStatus?: 'verified' | 'needs_review'; // Trạng thái kiểm chứng kép
+  sanityCheckNote?: string; // Ghi chú đối soát thử nghiệm ngược
+  confidence?: 'high' | 'medium' | 'needs_review'; // Độ tin cậy sau đối soát
+  pass1Answer?: string; // Đáp án lượt 1 (giải xuôi)
+  pass2Answer?: string; // Đáp án lượt 2 (thử nghiệm ngược)
 }
 
 // ==========================================
