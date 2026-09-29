@@ -75,9 +75,7 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
     setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  if (!isOpen) return null;
-
-  // Filter mistakes
+  // Filter mistakes (Chuyển lên trước hooks để useMemo có thể sử dụng)
   const filteredMistakes = mistakes.filter((m) => {
     if (selectedGrade !== 'all' && m.grade !== selectedGrade) return false;
     if (selectedExamTitle !== 'all') {
@@ -147,6 +145,9 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
     });
     return Array.from(map.values());
   }, [filteredMistakes]);
+
+  // LỆNH RETURN SỚM PHẢI ĐẶT SAU TẤT CẢ HOOKS BÊN TRÊN
+  if (!isOpen) return null;
 
   // Trigger re-check answer
   const handleCheckAnswer = (mistake: MistakeRecord) => {
