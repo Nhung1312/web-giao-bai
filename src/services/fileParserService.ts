@@ -301,9 +301,8 @@ export class FileParserService {
 
     const items: ParsedItem[] = [];
 
-    // Tìm TẤT CẢ các từ khóa "Câu 1", "Bài 1", kể cả khi nó nằm giữa 1 dòng chữ (không cần phải xuống dòng mới)
-    // Regex này bắt dấu cách hoặc đầu dòng, theo sau là Câu/Bài và số thứ tự
-    const splitRegex = /(?:^|\s)(?:Câu|Bài|Question)\s*(\d+)[\.:\s]+/gi;
+    // Tăng cường Regex: Nhận diện cả "Câu", "Bài", "Question", có hoặc không có dấu hai chấm/chấm, có thể nằm giữa dòng[cite: 1]
+    const splitRegex = /(?:^|\n|\s)(?:Câu|Bài|Question)\s*(\d+)[\.\:\s]+/gi;
 
     const matches: { index: number; num: number; matchStr: string }[] = [];
     let match;
@@ -350,22 +349,22 @@ export class FileParserService {
    * Trích xuất thông tin một khối câu hỏi (Biết tự tìm A, B, C, D)
    */
   private static extractSingleQuestionInfo(blockText: string, order: number): ParsedItem {
-    // Regex tìm đáp án A., B., C., D. (chỉ chấp nhận chữ hoa A., B., C., D. rõ ràng)
+    // Tăng cường Regex tìm đáp án: Có thể là A., A), A:, hoặc chỉ A đứng đầu một dòng
     const aRegex = /(?:^|\n|\s)A[\.\:\)]\s+/;
     const bRegex = /(?:^|\n|\s)B[\.\:\)]\s+/;
     const cRegex = /(?:^|\n|\s)C[\.\:\)]\s+/;
     const dRegex = /(?:^|\n|\s)D[\.\:\)]\s+/;
 
-    // Kiểm tra xem có chứa các ý a), b), c) hoặc 1), 2) tự luận hay không
+    // Các dấu hiệu nhận biết đây có thể là một câu tự luận phức tạp (có các ý con a, b, c)
     const hasSubParts = /(?:^|\n|\s)(?:[a-d]\)|[1-4]\))\s+/i.test(blockText);
-    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính giá trị|tìm x|giải phương trình|vẽ hình)\b/i.test(blockText);
+    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính giá trị|tìm x|giải phương trình|vẽ hình|tính)\b/i.test(blockText);
 
     const aMatch = blockText.match(aRegex);
     const bMatch = blockText.match(bRegex);
     const cMatch = blockText.match(cRegex);
     const dMatch = blockText.match(dRegex);
 
-    // CHÌA KHÓA: Nếu tìm thấy cả A và B trong nội dung VÀ không phải là câu chứng minh phân nhánh a), b) -> TRẮC NGHIỆM
+    // Xác định Trắc nghiệm: Bắt buộc phải có cả A và B. Nếu có các từ khóa tự luận và không có C/D thì ưu tiên Tự luận.
     const isMultipleChoice = (aMatch !== null && bMatch !== null) && !(hasSubParts && !cMatch && !dMatch);
     
     let questionContent = blockText;
@@ -398,8 +397,8 @@ export class FileParserService {
       }
     }
 
-    // Xóa chữ "Câu 1:" hay "Bài 1." ở đầu đề bài cho sạch đẹp
-    questionContent = questionContent.replace(/^(?:Chủ\s*đề[^\n]+\n+)?(?:Câu|Bài|Question)\s*\d+[\.:\s]*/i, '').trim();
+    // Làm sạch tiêu đề "Câu 1:" hay "Bài 1:" ở phần đề bài để hiển thị đẹp hơn
+    questionContent = questionContent.replace(/^(?:Chủ\s*đề[^\n]+\n+)?(?:Câu|Bài|Question)\s*\d+[\.\:\s]+/i, '').trim();
 
     return {
       id: `q_parsed_${Date.now()}_${order}`,
