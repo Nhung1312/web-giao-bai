@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   BookOpen, 
@@ -71,33 +72,41 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
   const [examPracticeIndex, setExamPracticeIndex] = useState<number>(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
+  // Đảm bảo Modal chỉ render Portal khi đã mount thành công trên trình duyệt
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const toggleGroup = (key: string) => {
     setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Filter mistakes (Chuyển lên trước hooks để useMemo có thể sử dụng)
-  const filteredMistakes = mistakes.filter((m) => {
-    if (selectedGrade !== 'all' && m.grade !== selectedGrade) return false;
-    if (selectedExamTitle !== 'all') {
-      const examTitle = m.assignmentTitle || m.assignmentId || 'Đề kiểm tra & Luyện tập chung';
-      if (examTitle !== selectedExamTitle) return false;
-    }
-    if (statusFilter === 'unmastered' && m.mastered) return false;
-    if (statusFilter === 'mastered' && !m.mastered) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchText = (m.question.question || '').toLowerCase();
-      const matchTopic = (m.assignmentTitle || '').toLowerCase() + (m.question.topicHint || '').toLowerCase();
-      if (!matchText.includes(q) && !matchTopic.includes(q)) return false;
-    }
-    return true;
-  });
+  // Filter mistakes
+  const filteredMistakes = useMemo(() => {
+    return mistakes.filter((m) => {
+      if (selectedGrade !== 'all' && m.grade !== selectedGrade) return false;
+      if (selectedExamTitle !== 'all') {
+        const examTitle = m.assignmentTitle || m.assignmentId || 'Đề kiểm tra & Luyện tập chung';
+        if (examTitle !== selectedExamTitle) return false;
+      }
+      if (statusFilter === 'unmastered' && m.mastered) return false;
+      if (statusFilter === 'mastered' && !m.mastered) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchText = (m.question.question || '').toLowerCase();
+        const matchTopic = (m.assignmentTitle || '').toLowerCase() + (m.question.topicHint || '').toLowerCase();
+        if (!matchText.includes(q) && !matchTopic.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [mistakes, selectedGrade, selectedExamTitle, statusFilter, searchQuery]);
 
   const activeCount = mistakes.filter((m) => !m.mastered).length;
   const masteredCount = mistakes.filter((m) => m.mastered).length;
 
   // List of all unique exams available in vault
-  const allAvailableExams = React.useMemo(() => {
+  const allAvailableExams = useMemo(() => {
     const map = new Map<string, { title: string; count: number; unmastered: number; grade: GradeLevel }>();
     mistakes.forEach((m) => {
       const title = m.assignmentTitle || 'Đề luyện tập chung';
@@ -112,7 +121,7 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
   }, [mistakes]);
 
   // Group by Exam
-  const mistakesByExam = React.useMemo(() => {
+  const mistakesByExam = useMemo(() => {
     const map = new Map<string, { assignmentId: string; assignmentTitle: string; grade: GradeLevel; mistakes: MistakeRecord[] }>();
     filteredMistakes.forEach((m) => {
       const key = m.assignmentTitle || m.assignmentId || 'Đề kiểm tra & Luyện tập chung';
@@ -130,7 +139,7 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
   }, [filteredMistakes]);
 
   // Group by Topic
-  const mistakesByTopic = React.useMemo(() => {
+  const mistakesByTopic = useMemo(() => {
     const map = new Map<string, { topicName: string; grade: GradeLevel; mistakes: MistakeRecord[] }>();
     filteredMistakes.forEach((m) => {
       const key = m.question.topicHint || 'Chuyên đề kiến thức chung';
@@ -146,8 +155,8 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
     return Array.from(map.values());
   }, [filteredMistakes]);
 
-  // LỆNH RETURN SỚM PHẢI ĐẶT SAU TẤT CẢ HOOKS BÊN TRÊN
-  if (!isOpen) return null;
+  // Lệnh return sớm phải đặt sau tất cả hooks
+  if (!isOpen || !mounted) return null;
 
   // Trigger re-check answer
   const handleCheckAnswer = (mistake: MistakeRecord) => {
@@ -186,7 +195,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
   // Request AI Hint
   const handleGetAiHint = async (mistake: MistakeRecord) => {
     if (mistake.aiHint) {
-      // Toggle display
       setShowExplanation((prev) => ({
         ...prev,
         [mistake.id]: !prev[mistake.id]
@@ -298,7 +306,7 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
             </div>
           </div>
 
-          {/* Question Illustration Image (nếu có) */}
+          {/* Question Illustration Image */}
           {m.question.imageUrl && (
             <div className="mt-2.5 max-w-md rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xs bg-white">
               <img 
@@ -392,7 +400,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
         {/* Card Bottom Controls */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
           <div className="flex items-center space-x-2">
-            {/* Check Answer Button */}
             <button
               onClick={() => handleCheckAnswer(m)}
               className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-transform active:scale-95 cursor-pointer"
@@ -401,7 +408,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
               <span>Kiểm tra đáp án</span>
             </button>
 
-            {/* AI Hint Button */}
             <button
               onClick={() => handleGetAiHint(m)}
               disabled={isAiLoading}
@@ -412,7 +418,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
             </button>
           </div>
 
-          {/* Mark as Mastered button manually if student understands */}
           <button
             onClick={() => {
               soundEffects.playSuccess();
@@ -455,8 +460,13 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
     );
   };
 
-  return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+  // Sử dụng createPortal để bốc modal ra khỏi Navbar, với cấu hình fixed tuyệt đối 
+  // và z-index cực cao (99999) để chắc chắn đè lên mọi thứ (kể cả Header)
+  return createPortal(
+    <div 
+      className="fixed inset-0 flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(2, 6, 23, 0.75)', backdropFilter: 'blur(4px)' }}
+    >
       <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto">
         
         {/* MODAL HEADER */}
@@ -492,7 +502,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
         {/* STATS & CONTROL BAR */}
         <div className="px-5 sm:px-8 py-3.5 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
           
-          {/* Quick Stats Badges */}
           <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
             <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 font-bold shadow-2xs">
               <AlertCircle className="w-4 h-4 text-rose-500" />
@@ -507,7 +516,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex items-center space-x-2">
             {masteredCount > 0 && (
               <button
@@ -561,7 +569,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
 
         {/* FILTERS & SEARCH ROW */}
         <div className="px-5 sm:px-8 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
-          {/* Grade filter tabs */}
           <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
             <button
               onClick={() => setSelectedGrade('all')}
@@ -588,7 +595,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
             ))}
           </div>
 
-          {/* Status filter tabs */}
           <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
             <button
               onClick={() => setStatusFilter('unmastered')}
@@ -624,7 +630,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
             </button>
           </div>
 
-          {/* Search bar */}
           <div className="relative w-full sm:w-60">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -687,7 +692,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Exam Filter Dropdown */}
             {allAvailableExams.length > 0 && (
               <div className="flex items-center space-x-1.5 text-xs">
                 <span className="font-bold text-slate-500 dark:text-slate-400">Lọc đề thi:</span>
@@ -705,7 +709,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                 </select>
               </div>
             )}
-
             <div className="text-[11px] text-slate-500 dark:text-slate-400">
               💡 Bấm <strong>"Luyện lại đề này"</strong> để làm lại các câu sai của bài thi đó!
             </div>
@@ -737,18 +740,15 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                   </p>
                 </div>
               </div>
-
               <div className="px-3.5 py-1.5 rounded-xl bg-white text-rose-700 font-black text-xs shadow-xs">
                 Câu {examPracticeIndex + 1} / {activeExamPractice.mistakes.length}
               </div>
             </div>
 
-            {/* Practice Question Card */}
             {activeExamPractice.mistakes[examPracticeIndex] && (
               <div className="space-y-4">
                 {renderMistakeCard(activeExamPractice.mistakes[examPracticeIndex], examPracticeIndex)}
-
-                {/* Navigation Bar */}
+                
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                   <button
                     disabled={examPracticeIndex === 0}
@@ -824,7 +824,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                 </p>
               </div>
             ) : viewGrouping === 'by_exam' ? (
-              /* VIEW BY EXAM GROUP */
               <div className="space-y-4">
                 {mistakesByExam.map((exam) => {
                   const isCollapsed = collapsedGroups[exam.assignmentTitle];
@@ -836,7 +835,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                       key={exam.assignmentTitle}
                       className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-xs overflow-hidden"
                     >
-                      {/* Exam Header */}
                       <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50/60 via-indigo-50/30 to-slate-50 dark:from-slate-800 dark:to-slate-800/60 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 shadow-inner">
@@ -876,7 +874,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                             <PlayCircle className="w-4 h-4" />
                             <span>Luyện tập lại đề này ({exam.mistakes.length} câu)</span>
                           </button>
-
                           <button
                             onClick={() => toggleGroup(exam.assignmentTitle)}
                             className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
@@ -887,7 +884,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                         </div>
                       </div>
 
-                      {/* Exam Questions List */}
                       {!isCollapsed && (
                         <div className="p-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/30">
                           {exam.mistakes.map((m, idx) => renderMistakeCard(m, idx))}
@@ -898,7 +894,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                 })}
               </div>
             ) : viewGrouping === 'by_topic' ? (
-              /* VIEW BY TOPIC GROUP */
               <div className="space-y-4">
                 {mistakesByTopic.map((topic) => {
                   const isCollapsed = collapsedGroups[topic.topicName];
@@ -910,7 +905,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                       key={topic.topicName}
                       className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-xs overflow-hidden"
                     >
-                      {/* Topic Header */}
                       <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-50/60 via-purple-50/30 to-slate-50 dark:from-slate-800 dark:to-slate-800/60 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-inner">
@@ -950,7 +944,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                             <PlayCircle className="w-4 h-4" />
                             <span>Luyện chuyên đề này ({topic.mistakes.length} câu)</span>
                           </button>
-
                           <button
                             onClick={() => toggleGroup(topic.topicName)}
                             className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
@@ -961,7 +954,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                         </div>
                       </div>
 
-                      {/* Topic Questions List */}
                       {!isCollapsed && (
                         <div className="p-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/30">
                           {topic.mistakes.map((m, idx) => renderMistakeCard(m, idx))}
@@ -972,7 +964,6 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
                 })}
               </div>
             ) : (
-              /* VIEW ALL (FLAT LIST) */
               filteredMistakes.map((m, idx) => renderMistakeCard(m, idx))
             )}
           </div>
@@ -994,6 +985,7 @@ export const MistakeVaultModal: React.FC<MistakeVaultModalProps> = ({ isOpen, on
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
