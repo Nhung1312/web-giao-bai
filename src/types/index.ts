@@ -136,6 +136,14 @@ export interface Submission {
   submittedAt: string;
   essayImages?: string[]; // Ảnh bài làm tổng thể đính kèm nếu có
   isAiGraded?: boolean;
+  hasEssayQuestions?: boolean;
+  gradingStatus?: 'graded' | 'pending_teacher_grading';
+  mcqScore?: number;
+  mcqPoints?: number;
+  maxMcqPoints?: number;
+  essayPoints?: number;
+  maxEssayPoints?: number;
+  teacherFeedback?: string;
   // Anti-cheat monitoring fields
   tabSwitchCount?: number;
   violationEvents?: ViolationEvent[];

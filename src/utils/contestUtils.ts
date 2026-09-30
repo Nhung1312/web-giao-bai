@@ -118,29 +118,37 @@ export function shuffleContestQuestions(
 ): Question[] {
   if (!questions || questions.length === 0) return [];
 
-  // 1. Tạo bản sao
-  let list: Question[] = questions.map(q => ({
-    ...q,
-    options: q.options ? q.options.map(opt => ({ ...opt })) : []
-  }));
+  // 1. Phân tách danh sách thành 2 nhóm độc lập: Trắc nghiệm & Tự luận
+  const mcqList: Question[] = [];
+  const essayList: Question[] = [];
 
-  // 2. Trộn thứ tự câu hỏi
+  questions.forEach(q => {
+    const isEssay = isEssayQuestion(q);
+    const cloned: Question = {
+      ...q,
+      type: isEssay ? 'essay' : (q.type || 'multiple_choice'),
+      options: q.options ? q.options.map(opt => ({ ...opt })) : []
+    };
+    if (isEssay) {
+      essayList.push(cloned);
+    } else {
+      mcqList.push(cloned);
+    }
+  });
+
+  // 2. Trộn thứ tự câu hỏi trong nội bộ nhóm Trắc nghiệm nếu có cờ shuffleQ
   if (shuffleQ) {
-    for (let i = list.length - 1; i > 0; i--) {
+    for (let i = mcqList.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [list[i], list[j]] = [list[j], list[i]];
+      [mcqList[i], mcqList[j]] = [mcqList[j], mcqList[i]];
     }
   }
 
-  // 3. Trộn đáp án nếu là trắc nghiệm
+  // 3. Trộn đáp án các câu trắc nghiệm nếu có cờ shuffleOpts
   const standardLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
-  list = list.map((q, idx) => {
-    const isEssay = isEssayQuestion(q);
-    if (!shuffleOpts || isEssay || !q.options || q.options.length <= 1) {
-      return {
-        ...q,
-        order: idx + 1
-      };
+  const processedMcq = mcqList.map((q) => {
+    if (!shuffleOpts || !q.options || q.options.length <= 1) {
+      return q;
     }
 
     const cleanCorrect = (q.correctAnswer || '').trim().toUpperCase();
@@ -200,11 +208,20 @@ export function shuffleContestQuestions(
 
     return {
       ...q,
-      order: idx + 1,
       options: newOptions,
       correctAnswer: newCorrect
     };
   });
 
-  return list;
+  const processedEssay = essayList.map(q => ({
+    ...q,
+    type: 'essay' as const,
+    options: []
+  }));
+
+  // Ghép lại: Luôn luôn TRẮC NGHIỆM TRƯỚC, TỰ LUẬN SAU, đánh số liên tục
+  return [...processedMcq, ...processedEssay].map((q, idx) => ({
+    ...q,
+    order: idx + 1
+  }));
 }

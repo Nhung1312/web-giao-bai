@@ -354,7 +354,8 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
           answers: updatedAnswers,
           totalScore,
           correctCount: correctCnt,
-          wrongCount: wrongCnt
+          wrongCount: wrongCnt,
+          gradingStatus: 'graded'
         };
 
         StorageService.saveSubmission(updatedSub);
@@ -1256,11 +1257,22 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
                           {sub.studentName}
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <span
-                            className={`inline-block px-3 py-1 rounded-xl font-extrabold text-sm border ${scoreColor}`}
-                          >
-                            {sub.totalScore.toFixed(1)}
-                          </span>
+                          {sub.hasEssayQuestions && sub.gradingStatus === 'pending_teacher_grading' ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-purple-100 text-purple-800 border border-purple-200">
+                                Chờ chấm tự luận
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-semibold">
+                                TN: {sub.mcqScore !== undefined ? sub.mcqScore.toFixed(1) : sub.totalScore.toFixed(1)}đ
+                              </span>
+                            </div>
+                          ) : (
+                            <span
+                              className={`inline-block px-3 py-1 rounded-xl font-extrabold text-sm border ${scoreColor}`}
+                            >
+                              {sub.totalScore.toFixed(1)}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-center text-xs font-semibold">
                           <span className="text-emerald-600 font-bold">{sub.correctCount}</span>
@@ -1642,6 +1654,33 @@ export const TeacherResults: React.FC<TeacherResultsProps> = ({
                 );
               })}
             </div>
+
+            {/* Nút Duyệt và công bố điểm cho học sinh */}
+            {selectedSubmissionDetail.hasEssayQuestions && selectedSubmissionDetail.gradingStatus === 'pending_teacher_grading' && (
+              <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+                <div className="text-xs text-purple-900">
+                  <span className="font-bold block">Bài thi này đang ở trạng thái: "Chờ giáo viên chấm"</span>
+                  <span className="text-purple-700 text-[11px]">Học sinh mới chỉ xem được điểm trắc nghiệm tạm tính.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const finalized: Submission = {
+                      ...selectedSubmissionDetail,
+                      gradingStatus: 'graded'
+                    };
+                    setSelectedSubmissionDetail(finalized);
+                    StorageService.saveSubmission(finalized);
+                    FirestoreService.saveResult(finalized).catch(() => {});
+                    alert('Đã duyệt và chính thức công bố điểm cho học sinh!');
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Duyệt & Công bố điểm</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

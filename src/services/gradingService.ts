@@ -306,9 +306,15 @@ export class GradingService {
 
     let earnedPointsTotal = 0;
     let maxPointsTotal = 0;
+    let earnedMcqPoints = 0;
+    let maxMcqPoints = 0;
+    let earnedEssayPoints = 0;
+    let maxEssayPoints = 0;
     let correctCount = 0;
     let wrongCount = 0;
     let unansweredCount = 0;
+
+    const hasEssayQuestions = assignment.questions.some(q => isEssayQuestion(q));
 
     const answers: StudentAnswer[] = assignment.questions.map((q) => {
       const selected = (studentAnswers[q.id] || '').trim();
@@ -325,12 +331,14 @@ export class GradingService {
       let originalSelectedLabel: string | undefined = undefined;
 
       if (isEssay) {
+        maxEssayPoints += q.points;
         // Với câu tự luận: nếu đã có điểm AI chấm
         if (aiEval && typeof aiEval.score === 'number') {
           pointsEarned = Math.min(q.points, Math.max(0, aiEval.score));
           isCorrect = pointsEarned >= (q.points * 0.5);
+          earnedEssayPoints += pointsEarned;
         } else if (solutionText || images.length > 0 || selected) {
-          // Đã có lời giải/ảnh nhưng chưa chấm AI
+          // Đã có lời giải/ảnh nhưng chưa chấm
           pointsEarned = 0;
           isCorrect = false;
         } else {
@@ -338,19 +346,23 @@ export class GradingService {
           pointsEarned = 0;
           isCorrect = false;
         }
-      } else if (q.type === 'short_answer') {
-        const evalRes = GradingService.evaluateShortAnswer(q, selected);
-        isUnanswered = evalRes.isUnanswered;
-        isCorrect = evalRes.isCorrect;
-        pointsEarned = isCorrect ? q.points : 0;
       } else {
-        // Trắc nghiệm & Đúng/Sai
-        const evalRes = GradingService.evaluateMultipleChoiceAnswer(q, selected);
-        isUnanswered = evalRes.isUnanswered;
-        isCorrect = evalRes.isCorrect;
-        selectedOptionText = evalRes.selectedOptionText;
-        originalSelectedLabel = evalRes.originalSelectedLabel;
-        pointsEarned = isCorrect ? q.points : 0;
+        maxMcqPoints += q.points;
+        if (q.type === 'short_answer') {
+          const evalRes = GradingService.evaluateShortAnswer(q, selected);
+          isUnanswered = evalRes.isUnanswered;
+          isCorrect = evalRes.isCorrect;
+          pointsEarned = isCorrect ? q.points : 0;
+        } else {
+          // Trắc nghiệm & Đúng/Sai
+          const evalRes = GradingService.evaluateMultipleChoiceAnswer(q, selected);
+          isUnanswered = evalRes.isUnanswered;
+          isCorrect = evalRes.isCorrect;
+          selectedOptionText = evalRes.selectedOptionText;
+          originalSelectedLabel = evalRes.originalSelectedLabel;
+          pointsEarned = isCorrect ? q.points : 0;
+        }
+        earnedMcqPoints += pointsEarned;
       }
 
       earnedPointsTotal += pointsEarned;
@@ -383,6 +395,7 @@ export class GradingService {
     // Quy đổi điểm ra thang điểm 10 chuẩn
     const rawScore = maxPointsTotal > 0 ? (earnedPointsTotal / maxPointsTotal) * 10 : 0;
     const finalScore = Math.round(rawScore * 10) / 10; // làm tròn 1 chữ số thập phân
+    const mcqScore = maxMcqPoints > 0 ? Math.round(((earnedMcqPoints / maxMcqPoints) * 10) * 10) / 10 : 0;
 
     const startTime = new Date(startedAt).getTime();
     const endTime = new Date(submittedAt).getTime();
@@ -399,6 +412,13 @@ export class GradingService {
       answers,
       totalScore: finalScore,
       maxScore: 10,
+      hasEssayQuestions,
+      gradingStatus: hasEssayQuestions ? 'pending_teacher_grading' : 'graded',
+      mcqScore,
+      mcqPoints: Math.round(earnedMcqPoints * 10) / 10,
+      maxMcqPoints: Math.round(maxMcqPoints * 10) / 10,
+      essayPoints: Math.round(earnedEssayPoints * 10) / 10,
+      maxEssayPoints: Math.round(maxEssayPoints * 10) / 10,
       correctCount,
       wrongCount,
       unansweredCount,

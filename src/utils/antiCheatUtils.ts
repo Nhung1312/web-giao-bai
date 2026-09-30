@@ -10,30 +10,36 @@ export function shuffleAssignmentQuestionsAndOptions(assignment: Assignment): As
     return assignment;
   }
 
-  // 1. Tạo bản sao sâu của danh sách câu hỏi
-  const questionsClone: Question[] = assignment.questions.map(q => ({
-    ...q,
-    type: isEssayQuestion(q) ? 'essay' : (q.type || 'multiple_choice'),
-    options: q.options ? q.options.map(opt => ({ ...opt })) : []
-  }));
+  // 1. Phân tách danh sách thành 2 nhóm độc lập: Trắc nghiệm & Tự luận
+  const mcqQuestions: Question[] = [];
+  const essayQuestions: Question[] = [];
 
-  // 2. Fisher-Yates shuffle thứ tự câu hỏi
-  for (let i = questionsClone.length - 1; i > 0; i--) {
+  assignment.questions.forEach(q => {
+    const isEssay = isEssayQuestion(q);
+    const cloned: Question = {
+      ...q,
+      type: isEssay ? 'essay' : (q.type || 'multiple_choice'),
+      options: q.options ? q.options.map(opt => ({ ...opt })) : []
+    };
+    if (isEssay) {
+      essayQuestions.push(cloned);
+    } else {
+      mcqQuestions.push(cloned);
+    }
+  });
+
+  // 2. Fisher-Yates shuffle thứ tự câu hỏi trong nội bộ nhóm Trắc nghiệm
+  for (let i = mcqQuestions.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [questionsClone[i], questionsClone[j]] = [questionsClone[j], questionsClone[i]];
+    [mcqQuestions[i], mcqQuestions[j]] = [mcqQuestions[j], mcqQuestions[i]];
   }
 
-  // 3. Shuffle các đáp án A, B, C, D trong từng câu và cập nhật lại correctAnswer
+  // 3. Shuffle các đáp án A, B, C, D trong từng câu trắc nghiệm và cập nhật lại correctAnswer
   const standardLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
 
-  const shuffledQuestions: Question[] = questionsClone.map((q, qIdx) => {
-    if (isEssayQuestion(q) || !q.options || q.options.length <= 1) {
-      return {
-        ...q,
-        type: 'essay',
-        order: qIdx + 1,
-        options: []
-      };
+  const shuffledMcq: Question[] = mcqQuestions.map((q) => {
+    if (!q.options || q.options.length <= 1) {
+      return q;
     }
 
     const cleanCorrect = (q.correctAnswer || '').trim().toUpperCase();
@@ -99,15 +105,27 @@ export function shuffleAssignmentQuestionsAndOptions(assignment: Assignment): As
 
     return {
       ...q,
-      order: qIdx + 1,
       options: newOptions,
       correctAnswer: newCorrectAnswer
     };
   });
 
+  // 4. Nhóm Tự luận: Chuẩn hóa type = 'essay', không có phương án trắc nghiệm
+  const processedEssay: Question[] = essayQuestions.map(q => ({
+    ...q,
+    type: 'essay',
+    options: []
+  }));
+
+  // 5. Ghép lại: Luôn luôn TRẮC NGHIỆM TRƯỚC, TỰ LUẬN SAU theo chuẩn sư phạm, đánh số order liên tục từ 1
+  const finalQuestions = [...shuffledMcq, ...processedEssay].map((q, idx) => ({
+    ...q,
+    order: idx + 1
+  }));
+
   return {
     ...assignment,
-    questions: shuffledQuestions
+    questions: finalQuestions
   };
 }
 

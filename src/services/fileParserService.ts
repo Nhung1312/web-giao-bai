@@ -20,6 +20,7 @@ export interface ParsedItem {
   correctAnswer: string;
   points: number;
   explanation?: string;
+  rubric?: string;
   topicHint?: string;
   rawText?: string;
   category: 'trac_nghiem' | 'tu_luan';
@@ -291,12 +292,62 @@ export class FileParserService {
   }
 
   /**
-   * Thông minh: Cắt chuỗi và tự động phân biệt Trắc nghiệm / Tự luận dựa vào đáp án A, B, C, D
+   * Bóc tách bảng đáp án tổng (nếu có trong đề dạng "Bảng đáp án: 1A 2B 3C..." hoặc "1.A 2.B" hoặc bảng ở cuối file)
+   */
+  private static extractAnswerKeyMap(text: string): Record<number, string> {
+    const map: Record<number, string> = {};
+    if (!text) return map;
+
+    // 1. Tìm khu vực có chữ "Bảng đáp án", "Đáp án trắc nghiệm", "Đáp án tham khảo", "Key:"
+    const tableHeaderMatch = text.match(/(?:bảng\s*đáp\s*án|đáp\s*án\s*trắc\s*nghiệm|đáp\s*án\s*chi\s*tiết|đáp\s*án|phiếu\s*trả\s*lời|hướng\s*dẫn\s*chấm|key)[\s\:\-]+([\s\S]+)$/i);
+    const searchArea = tableHeaderMatch ? tableHeaderMatch[1] : text;
+
+    // Quét các cặp số + ký tự A-D: "1A", "1.A", "1:A", "1-A", "Câu 1: A", "Câu 1. A"
+    const pairRegex = /(?:Câu|Bài)?\s*(\d+)[\.\:\-\s]+([A-D])\b/gi;
+    let match;
+    while ((match = pairRegex.exec(searchArea)) !== null) {
+      const qNum = parseInt(match[1], 10);
+      const ansLetter = match[2].toUpperCase();
+      if (!isNaN(qNum) && ['A', 'B', 'C', 'D'].includes(ansLetter)) {
+        map[qNum] = ansLetter;
+      }
+    }
+
+    // Nếu dạng chuỗi ngắn gọn "1A 2B 3C 4D..."
+    if (Object.keys(map).length === 0) {
+      const tightRegex = /\b(\d+)([A-D])\b/g;
+      while ((match = tightRegex.exec(searchArea)) !== null) {
+        const qNum = parseInt(match[1], 10);
+        const ansLetter = match[2].toUpperCase();
+        if (!isNaN(qNum) && qNum <= 100) {
+          map[qNum] = ansLetter;
+        }
+      }
+    }
+
+    return map;
+  }
+
+  /**
+   * Thông minh: Cắt chuỗi và tự động phân biệt Trắc nghiệm / Tự luận, tự động bắt đáp án và ngắt ý a), b), c)
    */
   static parseRawText(rawText: string, fileName: string = 'Đề thi', fileType: 'excel' | 'word' | 'pdf' | 'text' = 'text'): ParseResult {
     if (!rawText || !rawText.trim()) {
       return { fileName, fileType, totalFound: 0, multipleChoiceCount: 0, essayCount: 0, items: [] };
     }
+
+    // Bóc tách bảng đáp án tổng nếu có ở cuối hoặc đầu đề
+    const globalAnswerMap = this.extractAnswerKeyMap(rawText);
+
+    // Cắt bỏ phần Bảng đáp án ở cuối đề (nếu có) để tránh nhận diện nhầm thành một câu hỏi độc lập
+    let processedText = rawText;
+    const tableHeaderIdx = rawText.search(/\n\s*(?:bảng\s*đáp\s*án|đáp\s*án\s*trắc\s*nghiệm)[\s\:\-]/i);
+    if (tableHeaderIdx !== -1) {
+      processedText = rawText.substring(0, tableHeaderIdx);
+    }
+
+    // Nhận diện phân vùng: "PHẦN I. TRẮC NGHIỆM" và "PHẦN II. TỰ LUẬN"
+    const essaySectionIdx = processedText.search(/(?:\n|\s+)(?:phần\s*(?:ii|2|b)|ii\.|phần\s*tự\s*luận|b\.\s*tự\s*luận)\s*[\.\:\-]?\s*(?:tự\s*luận)?/i);
 
     const items: ParsedItem[] = [];
 
@@ -306,7 +357,7 @@ export class FileParserService {
 
     const matches: { index: number; num: number; matchStr: string }[] = [];
     let match;
-    while ((match = splitRegex.exec(rawText)) !== null) {
+    while ((match = splitRegex.exec(processedText)) !== null) {
       matches.push({
         index: match.index,
         num: parseInt(match[1], 10),
@@ -315,19 +366,23 @@ export class FileParserService {
     }
 
     if (matches.length === 0) {
-      // Nếu không tìm thấy chữ "Câu X" hay "Bài X", trả về 1 câu Tự luận bọc toàn bộ nội dung
-      items.push(this.buildFallbackItem(rawText, 1));
+      // Nếu không tìm thấy chữ "Câu X" hay "Bài X", xử lý toàn bộ như 1 câu tự luận
+      items.push(this.buildFallbackItem(processedText, 1));
     } else {
       for (let i = 0; i < matches.length; i++) {
         const current = matches[i];
-        const nextIndex = i + 1 < matches.length ? matches[i + 1].index : rawText.length;
+        const nextIndex = i + 1 < matches.length ? matches[i + 1].index : processedText.length;
         
         // Cắt lấy toàn bộ nội dung của câu hỏi này
-        let blockText = rawText.substring(current.index, nextIndex).trim();
+        let blockText = processedText.substring(current.index, nextIndex).trim();
         blockText = blockText.replace(/--- Trang \d+ ---/g, '').trim(); // Xóa số trang nếu có
 
+        // Kiểm tra xem câu này có nằm sau tiêu đề Phần Tự Luận không
+        const isExplicitEssaySection = essaySectionIdx !== -1 && current.index >= essaySectionIdx;
+        const assignedAnswerLetter = globalAnswerMap[current.num] || globalAnswerMap[i + 1];
+
         // Phân tích Trắc nghiệm / Tự luận cho riêng câu này
-        const parsedItem = this.extractSingleQuestionInfo(blockText, i + 1);
+        const parsedItem = this.extractSingleQuestionInfo(blockText, i + 1, isExplicitEssaySection, assignedAnswerLetter);
         items.push(parsedItem);
       }
     }
@@ -346,29 +401,39 @@ export class FileParserService {
   }
 
   /**
-   * Trích xuất thông tin một khối câu hỏi (Biết tự tìm A, B, C, D)
+   * Trích xuất thông tin một khối câu hỏi (Tự tìm A, B, C, D, bóc tách đáp án và format ngắt ý tự luận)
    */
-  private static extractSingleQuestionInfo(blockText: string, order: number): ParsedItem {
-    // Tăng cường Regex tìm đáp án: Có thể là A., A), A:, hoặc chỉ A đứng đầu một dòng
-    const aRegex = /(?:^|\n|\s)A[\.\:\)]\s+/;
-    const bRegex = /(?:^|\n|\s)B[\.\:\)]\s+/;
-    const cRegex = /(?:^|\n|\s)C[\.\:\)]\s+/;
-    const dRegex = /(?:^|\n|\s)D[\.\:\)]\s+/;
+  private static extractSingleQuestionInfo(
+    blockText: string, 
+    order: number, 
+    isExplicitEssaySection: boolean = false,
+    globalAnswerLetter?: string
+  ): ParsedItem {
+    // Regex tìm 4 phương án A, B, C, D
+    const aRegex = /(?:^|\n|\s)(?:\*|\\True\s*)?A[\.\:\)]\s+/i;
+    const bRegex = /(?:^|\n|\s)(?:\*|\\True\s*)?B[\.\:\)]\s+/i;
+    const cRegex = /(?:^|\n|\s)(?:\*|\\True\s*)?C[\.\:\)]\s+/i;
+    const dRegex = /(?:^|\n|\s)(?:\*|\\True\s*)?D[\.\:\)]\s+/i;
 
-    // Các dấu hiệu nhận biết đây có thể là một câu tự luận phức tạp (có các ý con a, b, c)
+    // Dấu hiệu nhận biết câu tự luận: có các ý con a), b), c) hoặc từ khóa bài toán chứng minh
     const hasSubParts = /(?:^|\n|\s)(?:[a-d]\)|[1-4]\))\s+/i.test(blockText);
-    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính|tính giá trị|tìm x|giải phương trình|vẽ hình|thực hiện phép tính)\b/i.test(blockText);
+    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính giá trị|tìm x|giải phương trình|vẽ hình|thực hiện phép tính)\b/i.test(blockText);
 
     const aMatch = blockText.match(aRegex);
     const bMatch = blockText.match(bRegex);
     const cMatch = blockText.match(cRegex);
     const dMatch = blockText.match(dRegex);
 
-    // Xác định Trắc nghiệm: Bắt buộc phải có cả A và B. Nếu có các từ khóa tự luận và không có C/D thì ưu tiên Tự luận.
-    const isMultipleChoice = (aMatch !== null && bMatch !== null) && !(hasSubParts && !cMatch && !dMatch);
-    
+    // Xác định Trắc nghiệm:
+    // Nếu nằm trong phần Tự luận rõ ràng -> là Tự luận
+    // Nếu có ít nhất A và B, và không nằm trong khu vực tự luận -> Trắc nghiệm
+    const isMultipleChoice = !isExplicitEssaySection && (aMatch !== null && bMatch !== null) && !(hasSubParts && !cMatch && !dMatch);
+
     let questionContent = blockText;
     let optA = '', optB = '', optC = '', optD = '';
+    let detectedCorrectLetter: string | null = globalAnswerLetter || null;
+    let solutionText = '';
+    let rubricText = '';
 
     if (isMultipleChoice) {
       const aIdx = blockText.search(aRegex);
@@ -395,9 +460,59 @@ export class FileParserService {
           optB = blockText.substring(bIdx + bMatch![0].length, dIdx !== -1 ? dIdx : undefined).trim();
         }
       }
+
+      // Phát hiện đáp án đúng được đánh dấu trong chính các phương án (VD: \True, *, [A]...)
+      const checkOptionMark = (text: string, letter: string): string => {
+        if (/\\True|\*|^\[[A-D]\]/i.test(text)) {
+          detectedCorrectLetter = letter;
+          return text.replace(/\\True/gi, '').replace(/\*/g, '').replace(/^\[[A-D]\][\.\:\s]*/i, '').trim();
+        }
+        return text;
+      };
+
+      optA = checkOptionMark(optA, 'A');
+      optB = checkOptionMark(optB, 'B');
+      optC = checkOptionMark(optC, 'C');
+      optD = checkOptionMark(optD, 'D');
+
+      // Kiểm tra dòng đáp án ngay sau câu (VD: "Đáp án: B" hoặc "Chọn C")
+      const inlineAnswerMatch = optD.match(/(?:\n|\s+)(?:Đáp\s*án|Chọn|Key)[\s\:\-]+([A-D])\b/i)
+        || blockText.match(/(?:^|\n|\s)(?:Đáp\s*án|Chọn|Key)[\s\:\-]+([A-D])\b/i);
+      if (inlineAnswerMatch) {
+        detectedCorrectLetter = inlineAnswerMatch[1].toUpperCase();
+        // Cắt bỏ dòng "Đáp án: X" khỏi phương án D nếu bị dính
+        optD = optD.replace(/(?:\n|\s+)(?:Đáp\s*án|Chọn|Key)[\s\:\-]+([A-D])\b/i, '').trim();
+      }
+
+      // Tách lời giải nếu có kèm sau câu trắc nghiệm
+      const mcSolutionMatch = optD.match(/(?:\n|\s+)(?:Lời\s*giải|Giải\s*thích|HD)[\s\:\-]+([\s\S]+)$/i);
+      if (mcSolutionMatch) {
+        solutionText = mcSolutionMatch[1].trim();
+        optD = optD.substring(0, mcSolutionMatch.index).trim();
+      }
+
+    } else {
+      // XỬ LÝ CÂU HỎI TỰ LUẬN
+      // 1. Tách phần Lời giải / Hướng dẫn chấm / Đáp số nếu có
+      const essaySolutionMatch = blockText.match(/(?:\n|\s+)(?:Lời\s*giải\s*chi\s*tiết|Lời\s*giải|Hướng\s*dẫn\s*chấm|Hướng\s*dẫn\s*giải|Đáp\s*số)[\s\:\-]+([\s\S]+)$/i);
+      if (essaySolutionMatch) {
+        solutionText = essaySolutionMatch[1].trim();
+        questionContent = blockText.substring(0, essaySolutionMatch.index).trim();
+      } else {
+        questionContent = blockText;
+      }
+
+      // 2. Tự động ngắt dòng và thụt lề định dạng đẹp mắt cho các ý con a), b), c)...
+      // Đảm bảo mỗi ý con a), b), c) được xuống dòng đôi và bôi đậm **a)**
+      questionContent = questionContent.replace(/(?:\r?\n|\s+)([a-d]|[1-4])\)\s+/gi, '\n\n**$1)** ');
+
+      // Nếu có biểu điểm trong lời giải
+      if (solutionText.includes('+0.') || solutionText.includes('điểm') || solutionText.includes('Rubric')) {
+        rubricText = solutionText;
+      }
     }
 
-    // Làm sạch tiêu đề "Câu 1:" hay "Bài 1:" và đặc biệt là "(1,5 điểm)" ở phần đề bài để hiển thị đẹp hơn
+    // Làm sạch tiêu đề "Câu 1:" hay "Bài 1:" và cụm điểm "(1,5 điểm)" ở đầu đề bài
     questionContent = questionContent.replace(/^(?:Chủ\s*đề[^\n]+\n+)?(?:Câu|Bài|Question)\s*\d+(?:\s*\([^\)]+\))?[\.\:\s]*/i, '').trim();
 
     return {
@@ -414,8 +529,10 @@ export class FileParserService {
             { id: 'D', text: optD || 'Phương án D' }
           ]
         : [],
-      correctAnswer: isMultipleChoice ? 'A' : '',
+      correctAnswer: isMultipleChoice ? (detectedCorrectLetter || 'A') : (solutionText ? 'Xem lời giải chi tiết' : ''),
       points: isMultipleChoice ? 0.5 : (hasProofKeywords ? 1.5 : 1.0),
+      explanation: solutionText,
+      rubric: rubricText,
       topicHint: 'Toán THCS',
       rawText: blockText,
       selected: true
@@ -423,10 +540,12 @@ export class FileParserService {
   }
 
   private static buildFallbackItem(text: string, order: number): ParsedItem {
+    // Format ngắt ý con a), b), c) cho văn bản fallback
+    const formatted = text.trim().replace(/(?:\r?\n|\s+)([a-d]|[1-4])\)\s+/gi, '\n\n**$1)** ');
     return {
       id: `q_parsed_${Date.now()}_${order}`,
       order: order,
-      question: text.trim(),
+      question: formatted,
       type: 'essay',
       category: 'tu_luan',
       options: [],
@@ -452,6 +571,7 @@ export class FileParserService {
         correctAnswer: item.correctAnswer || (isEssay ? '' : 'A'),
         points: item.points || (isEssay ? 1.0 : 0.5),
         explanation: item.explanation || '',
+        rubric: item.rubric || '',
         topicHint: item.topicHint || 'Toán THCS'
       };
     });

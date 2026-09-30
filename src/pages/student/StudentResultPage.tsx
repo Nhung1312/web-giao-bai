@@ -137,8 +137,9 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
   });
 
   // Calculate score rating banner
+  const hasPendingTeacherGrading = submission.hasEssayQuestions && submission.gradingStatus === 'pending_teacher_grading';
   const score = submission.totalScore;
-  let ratingColor = 'from-indigo-600 to-purple-600';
+  let ratingColor = hasPendingTeacherGrading ? 'from-purple-600 to-indigo-600' : 'from-indigo-600 to-purple-600';
   let ratingTitle = 'Làm bài khá tốt!';
   let ratingMessage = 'Hãy xem kỹ các câu sai để rút kinh nghiệm cho lần thi tiếp theo nhé.';
 
@@ -160,12 +161,29 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         
+        {/* BANNER THÔNG BÁO CHỜ GIÁO VIÊN CHẤM TỰ LUẬN NẾU CÓ */}
+        {hasPendingTeacherGrading && (
+          <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 dark:from-purple-950/40 dark:via-indigo-950/40 dark:to-amber-950/30 border-2 border-purple-200 dark:border-purple-800 rounded-3xl p-5 shadow-xs flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 flex items-center justify-center shrink-0">
+              <Clock className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-black text-base text-purple-900 dark:text-purple-200">
+                Bài thi đã nộp thành công! Phần Tự luận đang chờ Giáo viên kiểm tra & chấm điểm
+              </h3>
+              <p className="text-xs text-purple-800 dark:text-purple-300 leading-relaxed">
+                Hệ thống đã lưu lại toàn bộ câu trả lời, lời giải và ảnh bài làm của bạn. Điểm tổng kết chính thức và nhận xét của Thầy/Cô sẽ được công bố sau khi Thầy/Cô hoàn tất chấm phần tự luận.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* HERO SCORE SUMMARY CARD */}
         <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80 text-center relative overflow-hidden">
           <div className={`absolute top-0 left-0 right-0 h-3 bg-gradient-to-r ${ratingColor}`} />
 
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-indigo-50 text-indigo-600 font-black mb-4 shadow-inner border border-indigo-100">
-            <Trophy className="w-10 h-10" />
+            {hasPendingTeacherGrading ? <FileCheck2 className="w-10 h-10 text-purple-600" /> : <Trophy className="w-10 h-10" />}
           </div>
 
           <span className="inline-block bg-slate-100 text-slate-700 text-xs font-black uppercase px-3 py-1 rounded-full tracking-wider mb-2">
@@ -181,14 +199,34 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
 
           {/* Big Score Display */}
           <div className="my-6">
-            <div className="inline-flex items-baseline space-x-2 bg-gradient-to-br from-indigo-50 to-purple-50 px-8 py-4 rounded-3xl border-2 border-indigo-100 shadow-sm">
-              <span className="text-5xl sm:text-6xl font-black text-indigo-600 tracking-tight">
-                {score.toFixed(1)}
-              </span>
-              <span className="text-xl font-bold text-slate-400">/ 10</span>
-            </div>
-            <h3 className="font-extrabold text-base sm:text-lg text-slate-800 mt-3">{ratingTitle}</h3>
-            <p className="text-xs text-slate-500 max-w-lg mx-auto mt-1">{ratingMessage}</p>
+            {hasPendingTeacherGrading ? (
+              <div className="inline-flex flex-col items-center space-y-2 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 px-8 py-5 rounded-3xl border-2 border-purple-200 dark:border-purple-800 shadow-sm max-w-md mx-auto">
+                <span className="px-3 py-1 rounded-full bg-purple-200/80 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-black text-xs uppercase tracking-wider">
+                  ⏳ Đang chờ Giáo viên chấm tự luận
+                </span>
+                <div className="flex items-baseline space-x-1.5 pt-1">
+                  <span className="text-xs font-bold text-slate-500">Điểm Trắc nghiệm (tạm tính):</span>
+                  <span className="text-3xl sm:text-4xl font-black text-purple-700 dark:text-purple-300">
+                    {submission.mcqScore !== undefined ? submission.mcqScore.toFixed(1) : score.toFixed(1)}
+                  </span>
+                  <span className="text-sm font-bold text-slate-400">/ 10</span>
+                </div>
+                <p className="text-[11px] text-purple-700 dark:text-purple-300 italic">
+                  (Điểm chính thức cả bài sẽ được hiển thị sau khi Thầy/Cô chấm điểm phần tự luận)
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="inline-flex items-baseline space-x-2 bg-gradient-to-br from-indigo-50 to-purple-50 px-8 py-4 rounded-3xl border-2 border-indigo-100 shadow-sm">
+                  <span className="text-5xl sm:text-6xl font-black text-indigo-600 tracking-tight">
+                    {score.toFixed(1)}
+                  </span>
+                  <span className="text-xl font-bold text-slate-400">/ 10</span>
+                </div>
+                <h3 className="font-extrabold text-base sm:text-lg text-slate-800 mt-3">{ratingTitle}</h3>
+                <p className="text-xs text-slate-500 max-w-lg mx-auto mt-1">{ratingMessage}</p>
+              </>
+            )}
           </div>
 
           {/* 4 Stat Badges Grid */}
