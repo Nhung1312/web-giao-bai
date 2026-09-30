@@ -279,7 +279,6 @@ export class FileParserService {
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
-        // Giữ khoảng cách giữa các chữ để tránh bị dính nhau
         const pageText = textContent.items.map((item: any) => item.str).join(' ');
         fullText += `\n` + pageText;
       }
@@ -301,8 +300,9 @@ export class FileParserService {
 
     const items: ParsedItem[] = [];
 
-    // Tăng cường Regex: Nhận diện cả "Câu", "Bài", "Question", có hoặc không có dấu hai chấm/chấm, có thể nằm giữa dòng[cite: 1]
-    const splitRegex = /(?:^|\n|\s)(?:Câu|Bài|Question)\s*(\d+)[\.\:\s]+/gi;
+    // Tăng cường Regex: Nhận diện cả "Câu", "Bài", "Question", có hoặc không có dấu hai chấm/chấm.
+    // ĐẶC BIỆT: (?:\s*\([^\)]+\))? -> cho phép bỏ qua các cụm ghi chú điểm số như "(1,5 điểm)" hay "(2.0 đ)"
+    const splitRegex = /(?:^|\n|\s)(?:Câu|Bài|Question)\s*(\d+)(?:\s*\([^\)]+\))?[\.\:\s]*/gi;
 
     const matches: { index: number; num: number; matchStr: string }[] = [];
     let match;
@@ -357,7 +357,7 @@ export class FileParserService {
 
     // Các dấu hiệu nhận biết đây có thể là một câu tự luận phức tạp (có các ý con a, b, c)
     const hasSubParts = /(?:^|\n|\s)(?:[a-d]\)|[1-4]\))\s+/i.test(blockText);
-    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính giá trị|tìm x|giải phương trình|vẽ hình|tính)\b/i.test(blockText);
+    const hasProofKeywords = /\b(chứng minh|chứng tỏ|cmr|rút gọn|tính|tính giá trị|tìm x|giải phương trình|vẽ hình|thực hiện phép tính)\b/i.test(blockText);
 
     const aMatch = blockText.match(aRegex);
     const bMatch = blockText.match(bRegex);
@@ -397,8 +397,8 @@ export class FileParserService {
       }
     }
 
-    // Làm sạch tiêu đề "Câu 1:" hay "Bài 1:" ở phần đề bài để hiển thị đẹp hơn
-    questionContent = questionContent.replace(/^(?:Chủ\s*đề[^\n]+\n+)?(?:Câu|Bài|Question)\s*\d+[\.\:\s]+/i, '').trim();
+    // Làm sạch tiêu đề "Câu 1:" hay "Bài 1:" và đặc biệt là "(1,5 điểm)" ở phần đề bài để hiển thị đẹp hơn
+    questionContent = questionContent.replace(/^(?:Chủ\s*đề[^\n]+\n+)?(?:Câu|Bài|Question)\s*\d+(?:\s*\([^\)]+\))?[\.\:\s]*/i, '').trim();
 
     return {
       id: `q_parsed_${Date.now()}_${order}`,
