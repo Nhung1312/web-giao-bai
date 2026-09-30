@@ -27,6 +27,43 @@ import {
   Award
 } from 'lucide-react';
 
+const POPULAR_STUDENT_REQUESTS: Record<GradeLevel, string[]> = {
+  '6': [
+    'Tập hợp số tự nhiên & Phép chia hết',
+    'Số nguyên: Phép cộng, trừ, nhân, chia',
+    'Phân số: Rút gọn, so sánh & Phép tính',
+    'Số thập phân & Tỉ số phần trăm',
+    'Hình vuông, tam giác đều, lục giác đều',
+    'Chu vi & Diện tích các hình phẳng'
+  ],
+  '7': [
+    'Số hữu tỉ & Các phép tính',
+    'Số thực & Căn bậc hai số học',
+    'Tỉ lệ thức & Dãy tỉ số bằng nhau',
+    'Tam giác bằng nhau (c-c-c, c-g-c, g-c-g)',
+    'Tam giác cân & Định lý Pythagore',
+    'Đại lượng tỉ lệ thuận & Tỉ lệ nghịch'
+  ],
+  '8': [
+    'Phân tích đa thức thành nhân tử',
+    '7 Hằng đẳng thức đáng nhớ & Ứng dụng',
+    'Rút gọn phân thức đại số',
+    'Phương trình bậc nhất một ẩn',
+    'Định lý Thalès trong tam giác',
+    'Tam giác đồng dạng & Các trường hợp đồng dạng',
+    'Hình thang cân, hình thoi, hình chữ nhật'
+  ],
+  '9': [
+    'Rút gọn biểu thức chứa căn bậc hai',
+    'Hệ hai phương trình bậc nhất hai ẩn',
+    'Phương trình bậc hai & Định lý Vi-ét',
+    'Hệ thức lượng trong tam giác vuông',
+    'Góc nội tiếp & Tứ giác nội tiếp đường tròn',
+    'Đường tròn & Tiếp tuyến của đường tròn',
+    'Bất đẳng thức & Tìm GTLN, GTNN'
+  ]
+};
+
 interface StudentAiPracticeViewProps {
   classes: ClassRoom[];
   studentName: string;
@@ -50,7 +87,8 @@ export const StudentAiPracticeView: React.FC<StudentAiPracticeViewProps> = ({
 }) => {
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>('8');
   const [practiceScope, setPracticeScope] = useState<PracticeScope>('topic');
-  const [selectedTopic, setSelectedTopic] = useState<string>('7 Hằng đẳng thức đáng nhớ & Ứng dụng');
+  const [topicMode, setTopicMode] = useState<'preset' | 'custom'>('preset');
+  const [selectedTopic, setSelectedTopic] = useState<string>('Phân tích đa thức thành nhân tử');
   const [customTopic, setCustomTopic] = useState<string>('');
   const [topicCategory, setTopicCategory] = useState<'all' | 'algebra' | 'geometry' | 'statistics'>('all');
   const [topicSearch, setTopicSearch] = useState<string>('');
@@ -86,7 +124,11 @@ export const StudentAiPracticeView: React.FC<StudentAiPracticeViewProps> = ({
     if (practiceScope === 'hk1') return `Đề thi thử Cuối học kỳ 1 (Toán ${selectedGrade})`;
     if (practiceScope === 'gk2') return `Đề thi thử Giữa học kỳ 2 (Toán ${selectedGrade})`;
     if (practiceScope === 'hk2') return `Đề thi thử Cuối học kỳ 2 (Toán ${selectedGrade})`;
-    return customTopic.trim() || selectedTopic;
+    
+    if (topicMode === 'custom') {
+      return customTopic.trim() || selectedTopic;
+    }
+    return selectedTopic;
   };
 
   const activeTopicName = getEffectiveTopicName();
@@ -383,115 +425,204 @@ export const StudentAiPracticeView: React.FC<StudentAiPracticeViewProps> = ({
 
         {/* If Mode is Topic: Show list of topics */}
         {practiceScope === 'topic' ? (
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                Chuyên đề môn Toán lớp {selectedGrade} (SGK Kết nối tri thức):
-              </span>
-
-              {/* Category Filter Pills */}
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setTopicCategory('all')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    topicCategory === 'all'
-                      ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Tất cả
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTopicCategory('algebra')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    topicCategory === 'algebra'
-                      ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Đại số
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTopicCategory('geometry')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    topicCategory === 'geometry'
-                      ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Hình học
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTopicCategory('statistics')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    topicCategory === 'statistics'
-                      ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Thống kê
-                </button>
-              </div>
+          <div className="space-y-3">
+            {/* SUB-TABS: CHỦ ĐỀ CÓ SẴN vs CHỦ ĐỀ HỌC SINH YÊU CẦU */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2">
+              <button
+                type="button"
+                onClick={() => setTopicMode('preset')}
+                className={`pb-2.5 px-3.5 text-xs sm:text-sm font-bold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  topicMode === 'preset'
+                    ? 'border-violet-600 text-violet-700 dark:text-violet-300 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Chủ đề có sẵn (SGK Toán {selectedGrade})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTopicMode('custom')}
+                className={`pb-2.5 px-3.5 text-xs sm:text-sm font-bold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  topicMode === 'custom'
+                    ? 'border-violet-600 text-violet-700 dark:text-violet-300 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>Chủ đề học sinh yêu cầu (Tự gõ)</span>
+              </button>
             </div>
 
-            {/* Curriculum Topics List */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto p-1 pr-1.5 custom-scrollbar">
-              {filteredTopics.map((topic) => {
-                const isSelected = selectedTopic === topic.name && !customTopic.trim();
-                return (
-                  <div
-                    key={topic.id}
-                    onClick={() => {
-                      setSelectedTopic(topic.name);
-                      setCustomTopic('');
-                    }}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center space-x-2.5 ${
-                      isSelected
-                        ? 'border-violet-600 bg-violet-50/70 dark:bg-violet-950/50 text-violet-900 dark:text-violet-100 ring-1 ring-violet-500 shadow-2xs'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                      topic.category === 'geometry'
-                        ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600'
-                        : topic.category === 'statistics'
-                        ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-600'
-                        : 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600'
-                    }`}>
-                      {topic.category === 'geometry' ? (
-                        <Shapes className="w-3.5 h-3.5" />
-                      ) : topic.category === 'statistics' ? (
-                        <PieChart className="w-3.5 h-3.5" />
-                      ) : (
-                        <Calculator className="w-3.5 h-3.5" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold leading-snug line-clamp-2">
-                        {topic.name}
-                      </p>
-                    </div>
-                    {isSelected && (
-                      <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />
+            {topicMode === 'preset' ? (
+              <div className="space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="relative flex-1 max-w-xs">
+                    <input
+                      type="text"
+                      value={topicSearch}
+                      onChange={(e) => setTopicSearch(e.target.value)}
+                      placeholder="Tìm chuyên đề nhanh..."
+                      className="w-full pl-3 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+
+                  {/* Category Filter Pills */}
+                  <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setTopicCategory('all')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        topicCategory === 'all'
+                          ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Tất cả
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTopicCategory('algebra')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        topicCategory === 'algebra'
+                          ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Đại số
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTopicCategory('geometry')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        topicCategory === 'geometry'
+                          ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Hình học
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTopicCategory('statistics')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        topicCategory === 'statistics'
+                          ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Thống kê
+                    </button>
+                  </div>
+                </div>
+
+                {/* Curriculum Topics List */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto p-1 pr-1.5 custom-scrollbar">
+                  {filteredTopics.map((topic) => {
+                    const isSelected = selectedTopic === topic.name;
+                    return (
+                      <div
+                        key={topic.id}
+                        onClick={() => setSelectedTopic(topic.name)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center space-x-2.5 ${
+                          isSelected
+                            ? 'border-violet-600 bg-violet-50/80 dark:bg-violet-950/60 text-violet-900 dark:text-violet-100 ring-1 ring-violet-500 shadow-2xs'
+                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                          topic.category === 'geometry'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600'
+                            : topic.category === 'statistics'
+                            ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-600'
+                            : 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600'
+                        }`}>
+                          {topic.category === 'geometry' ? (
+                            <Shapes className="w-3.5 h-3.5" />
+                          ) : topic.category === 'statistics' ? (
+                            <PieChart className="w-3.5 h-3.5" />
+                          ) : (
+                            <Calculator className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold leading-snug line-clamp-2">
+                            {topic.name}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* TAB: CHỦ ĐỀ HỌC SINH YÊU CẦU */
+              <div className="space-y-3 p-3 bg-violet-50/50 dark:bg-violet-950/30 rounded-2xl border border-violet-200 dark:border-violet-900">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+                    <span>Em muốn luyện dạng toán nào? Hãy gõ chính xác vào ô dưới:</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customTopic}
+                      onChange={(e) => setCustomTopic(e.target.value)}
+                      placeholder="Ví dụ: Phân tích đa thức thành nhân tử, Rút gọn phân thức, Định lý Thalès, Tìm x nguyên..."
+                      className="w-full pl-3.5 pr-16 py-2.5 bg-white dark:bg-slate-800 border-2 border-violet-300 dark:border-violet-700 rounded-xl text-xs sm:text-sm font-bold text-slate-900 dark:text-white placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-2xs"
+                    />
+                    {customTopic && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomTopic('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        Xóa
+                      </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                </div>
 
-            {/* Custom input */}
-            <div className="mt-2.5">
-              <input
-                type="text"
-                value={customTopic}
-                onChange={(e) => setCustomTopic(e.target.value)}
-                placeholder="Hoặc tự gõ dạng bài cụ thể: Rút gọn phân thức, Tam giác đồng dạng, Bất đẳng thức..."
-                className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-              />
+                {/* Quick Suggestion Chips */}
+                <div>
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1.5">
+                    💡 Hoặc bấm chọn nhanh các chuyên đề thường gặp môn Toán lớp {selectedGrade}:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {POPULAR_STUDENT_REQUESTS[selectedGrade]?.map((popTopic, idx) => {
+                      const isPicked = customTopic.trim() === popTopic;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setCustomTopic(popTopic)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                            isPicked
+                              ? 'bg-violet-600 text-white border-violet-600 shadow-2xs font-bold'
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-300 hover:bg-violet-50/60'
+                          }`}
+                        >
+                          {popTopic}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Confirmation Banner */}
+            <div className="p-3 bg-violet-50/80 dark:bg-violet-950/40 rounded-2xl border border-violet-200 dark:border-violet-800 flex items-center justify-between text-xs">
+              <div className="flex items-center space-x-2 text-violet-950 dark:text-violet-200">
+                <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />
+                <span>Chủ đề được chọn ôn tập: <strong className="text-violet-700 dark:text-violet-300">{activeTopicName}</strong></span>
+              </div>
+              <span className="text-[11px] text-violet-600 dark:text-violet-400 font-extrabold uppercase tracking-wider">
+                {topicMode === 'preset' ? 'Chủ đề SGK' : 'Chủ đề yêu cầu'}
+              </span>
             </div>
           </div>
         ) : (

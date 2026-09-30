@@ -117,13 +117,28 @@ export class PracticeEngineService {
 
     const cleanTopicLower = topic.toLowerCase();
 
-    // Xác định bộ từ khóa tìm kiếm
-    let searchKeywords: string[] = [cleanTopicLower];
-    Object.entries(TOPIC_KEYWORD_MAP).forEach(([key, words]) => {
-      if (cleanTopicLower.includes(key)) {
-        searchKeywords.push(...words);
-      }
-    });
+    // Xác định bộ từ khóa tìm kiếm và từ khóa loại trừ (tránh nhận nhầm dạng bài đối nghịch)
+    let searchKeywords: string[] = [];
+    let excludeKeywords: string[] = [];
+
+    // Xử lý các chuyên đề nhạy cảm dễ nhầm lẫn
+    if (cleanTopicLower.includes('phân tích') || cleanTopicLower.includes('nhân tử')) {
+      // Chủ đề PHÂN TÍCH ĐA THỨC THÀNH NHÂN TỬ:
+      // Chỉ lấy các câu hỏi yêu cầu phân tích thành nhân tử / đặt nhân tử chung
+      // Tuyệt đối loại bỏ các câu hỏi về phép nhân đa thức / khai triển tích
+      searchKeywords = ['phân tích', 'thành nhân tử', 'nhân tử chung', 'nhóm hạng tử', 'thành tích'];
+      excludeKeywords = ['kết quả của phép nhân', 'tích của đơn thức', 'tích của đa thức', 'thực hiện phép nhân', 'nhân đơn thức', 'nhân đa thức', 'khai triển tích'];
+    } else if (cleanTopicLower.includes('nhân đơn thức') || cleanTopicLower.includes('nhân đa thức') || cleanTopicLower.includes('phép nhân')) {
+      searchKeywords = ['nhân đơn thức', 'nhân đa thức', 'phép nhân', 'tích của'];
+      excludeKeywords = ['phân tích đa thức thành nhân tử', 'thành nhân tử'];
+    } else {
+      searchKeywords = [cleanTopicLower];
+      Object.entries(TOPIC_KEYWORD_MAP).forEach(([key, words]) => {
+        if (cleanTopicLower.includes(key)) {
+          searchKeywords.push(...words);
+        }
+      });
+    }
 
     // Nếu là chế độ Giữa kỳ / Cuối kỳ:
     const isGK1 = scope === 'gk1';
@@ -140,12 +155,12 @@ export class PracticeEngineService {
 
       if (scope === 'topic') {
         // Tìm theo chuyên đề
-        isRelevantExam = searchKeywords.some(kw => asgTitle.includes(kw) || asgTopic.includes(kw));
+        isRelevantExam = searchKeywords.some(kw => asgTitle.includes(kw) || asgTopic.includes(kw)) || true;
       } else if (isGK1) {
         isRelevantExam = asgTitle.includes('giữa kì 1') || asgTitle.includes('giữa kỳ 1') || asgTitle.includes('gk1') ||
                          searchKeywords.some(kw => asgTitle.includes(kw) || asgTopic.includes(kw));
       } else if (isHK1) {
-        isRelevantExam = asgTitle.includes('kì 1') || asgTitle.includes('kỳ 1') || asgTitle.includes('hk1') || true; // HK1 bao gồm toàn bộ nửa đầu năm
+        isRelevantExam = asgTitle.includes('kì 1') || asgTitle.includes('kỳ 1') || asgTitle.includes('hk1') || true;
       } else {
         isRelevantExam = true;
       }
@@ -157,9 +172,15 @@ export class PracticeEngineService {
             const qText = (q.question || '').toLowerCase();
             const qHint = (q.topicHint || '').toLowerCase();
 
+            // Nếu câu chứa từ khóa loại trừ của chủ đề hiện tại -> Bỏ qua ngay
+            if (excludeKeywords.length > 0 && excludeKeywords.some(ex => qText.includes(ex) || qHint.includes(ex))) {
+              return;
+            }
+
             let isMatch = false;
             if (scope === 'topic') {
-              isMatch = searchKeywords.some(kw => qText.includes(kw) || qHint.includes(kw) || asgTitle.includes(kw));
+              // Đối soát trực tiếp vào nội dung câu hỏi hoặc gợi ý chủ đề của câu (không chỉ dựa vào tiêu đề đề thi chung)
+              isMatch = searchKeywords.some(kw => qText.includes(kw) || qHint.includes(kw));
             } else {
               isMatch = true;
             }

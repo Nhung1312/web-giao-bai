@@ -614,11 +614,27 @@ ${specificAdvice}
 Bạn là giáo viên chuyên soạn đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, bám sát chuẩn kiến thức & kỹ năng bộ sách giáo khoa "Kết nối tri thức với cuộc sống").
 Hãy tạo ${params.count} câu hỏi trắc nghiệm Toán lớp ${params.grade}, chủ đề: "${params.topic}", mức độ: "${params.difficulty || 'Hỗn hợp'}".
 
-QUY TẮC ĐỐI SOÁT CHẤT LƯỢNG BẮT BUỘC:
-1. Đảm bảo đúng phạm vi kiến thức Toán lớp ${params.grade} (bộ Kết nối tri thức), không đưa các dạng bài vượt lớp.
-2. Mỗi câu có ĐÚNG 4 PHƯƠNG ÁN KHÁC NHAU A, B, C, D (nội dung 4 phương án không được trùng lặp).
-3. Tự giải đối soát lại để chắc chắn phương án được gán là correctAnswer là đúng tuyệt đối 100%, 3 phương án còn lại là bẫy số học điển hình.
-4. Chọn số liệu đẹp (nghiệm nguyên hoặc phân số tối giản).
+QUY TẮC SƯ PHẠM VÀ PHẠM VI KIẾN THỨC BẮT BUỘC (TUÂN THỦ 100%):
+1. ĐÚNG BẢN CHẤT DẠNG TOÁN THEO CHỦ ĐỀ "${params.topic}":
+   - NẾU CHỦ ĐỀ LÀ "Phân tích đa thức thành nhân tử" (hoặc liên quan đến nhân tử):
+     * BẢN CHẤT HỌC THUẬT: Đề bài PHẢI cho một đa thức ở dạng TỔNG/HIỆU (ví dụ: $x^2 - 4$, $x^2 - 6x + 9$, $2x(x-1) + 3(x-1)$, $x^2 - 5x + 6$, $x^3 - 8$...) và yêu cầu học sinh biến đổi về dạng TÍCH!
+     * Cả 4 phương án A, B, C, D BẮT BUỘC PHẢI Ở DẠNG TÍCH (ví dụ: $(x-2)(x+2)$, $(x-3)^2$, $(x-1)(2x+3)$...).
+     * TUYỆT ĐỐI CẤM: KHÔNG ĐƯỢC ra bài toán nhân đa thức (như tính tích $(x-2)(x+2) = ?$ hay $(x+1)(x+3) = ?$ rồi kết quả là đa thức thu gọn). Đó là bài toán KHAI TRIỂN / PHÉP NHÂN ĐA THỨC, HOÀN TOÀN NGƯỢC với Phân tích thành nhân tử!
+   - NẾU CHỦ ĐỀ LÀ "Phép nhân đơn thức, đa thức":
+     * Đề bài cho phép nhân, yêu cầu học sinh khai triển và thu gọn thành đa thức.
+   - NẾU CHỦ ĐỀ LÀ "7 Hằng đẳng thức đáng nhớ":
+     * Khai triển hằng đẳng thức hoặc viết biểu thức dưới dạng bình phương/lập phương.
+   - NẾU CHỦ ĐỀ LÀ "Phân thức đại số":
+     * Tìm điều kiện xác định, rút gọn phân thức đại số hoặc quy đồng mẫu thức.
+   - NẾU CHỦ ĐỀ LÀ "Phương trình" / "Hệ phương trình":
+     * Yêu cầu tìm nghiệm hoặc tập nghiệm $S$.
+   - NẾU LÀ HÌNH HỌC / THỐNG KÊ:
+     * Đúng tính chất hình học, định lý, công thức diện tích/thể tích của lớp ${params.grade}.
+
+2. ĐỐI SOÁT CHẤT LƯỢNG TRẮC NGHIỆM:
+   - Mỗi câu có ĐÚNG 4 PHƯƠNG ÁN KHÁC NHAU A, B, C, D (không được trùng lặp nội dung).
+   - Tự giải đối soát lại để chắc chắn phương án được gán là correctAnswer là đúng tuyệt đối 100%, 3 phương án còn lại là bẫy số học điển hình.
+   - Chọn số liệu đẹp (nghiệm nguyên hoặc phân số tối giản).
 
 Trả về mảng JSON thuần túy (không bọc text giải thích bên ngoài):
 [
@@ -730,6 +746,74 @@ Trả về mảng JSON thuần túy (không bọc text giải thích bên ngoài
           points: 1,
           explanation: '√2 là số thập phân vô hạn không tuần hoàn nên là số vô tỉ. √9 = 3 là số hữu tỉ.',
           topicHint: 'Số vô tỉ & Số thực'
+        }
+      ],
+      '8': [
+        {
+          id: `q_gen_${Date.now()}_81`,
+          order: 1,
+          question: 'Phân tích đa thức x² - 4 thành nhân tử, ta được kết quả là:',
+          type: 'multiple_choice',
+          options: [
+            { id: 'A', text: '(x - 2)(x + 2)' },
+            { id: 'B', text: '(x - 2)²' },
+            { id: 'C', text: '(x + 2)²' },
+            { id: 'D', text: 'x(x - 4)' }
+          ],
+          correctAnswer: 'A',
+          points: 1,
+          explanation: 'Áp dụng hằng đẳng thức hiệu hai bình phương: A² - B² = (A - B)(A + B). Do đó x² - 4 = x² - 2² = (x - 2)(x + 2).',
+          topicHint: 'Phân tích đa thức thành nhân tử'
+        },
+        {
+          id: `q_gen_${Date.now()}_82`,
+          order: 2,
+          question: 'Đa thức 2x(x - 3) + 5(x - 3) được phân tích thành nhân tử là:',
+          type: 'multiple_choice',
+          options: [
+            { id: 'A', text: '(x - 3)(2x + 5)' },
+            { id: 'B', text: '(x - 3)(2x - 5)' },
+            { id: 'C', text: '10x(x - 3)' },
+            { id: 'D', text: '(2x - 3)(x + 5)' }
+          ],
+          correctAnswer: 'A',
+          points: 1,
+          explanation: 'Đặt nhân tử chung là (x - 3), ta được: (x - 3)(2x + 5).',
+          topicHint: 'Phân tích đa thức thành nhân tử'
+        },
+        {
+          id: `q_gen_${Date.now()}_83`,
+          order: 3,
+          question: 'Phân tích đa thức x² - 6x + 9 thành nhân tử, ta được:',
+          type: 'multiple_choice',
+          options: [
+            { id: 'A', text: '(x - 3)²' },
+            { id: 'B', text: '(x + 3)²' },
+            { id: 'C', text: '(x - 9)(x + 1)' },
+            { id: 'D', text: '(x - 3)(x + 3)' }
+          ],
+          correctAnswer: 'A',
+          points: 1,
+          explanation: 'Áp dụng hằng đẳng thức bình phương của một hiệu: A² - 2AB + B² = (A - B)². Ta có: x² - 2·x·3 + 3² = (x - 3)².',
+          topicHint: 'Phân tích đa thức thành nhân tử'
+        }
+      ],
+      '9': [
+        {
+          id: `q_gen_${Date.now()}_91`,
+          order: 1,
+          question: 'Nghiệm của hệ phương trình { x + y = 5; x - y = 1 } là:',
+          type: 'multiple_choice',
+          options: [
+            { id: 'A', text: '(3; 2)' },
+            { id: 'B', text: '(2; 3)' },
+            { id: 'C', text: '(4; 1)' },
+            { id: 'D', text: '(5; 0)' }
+          ],
+          correctAnswer: 'A',
+          points: 1,
+          explanation: 'Cộng 2 vế: 2x = 6 => x = 3. Thay vào: 3 + y = 5 => y = 2. Vậy hệ có nghiệm (3; 2).',
+          topicHint: 'Hệ phương trình bậc nhất hai ẩn'
         }
       ]
     };
