@@ -442,17 +442,24 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
     }
   };
 
-  const handleImportFromText = async () => {
+  // CẬP NHẬT: Thay thế AI parsing bằng hàm siêu việt FileParserService.parseRawText
+  const handleImportFromText = () => {
     if (!rawTextImport.trim()) return;
-    const parsed = await aiService.parseQuestionsFromText(rawTextImport);
-    if (parsed.length > 0) {
-      const reIndexed = parsed.map((p, i) => ({
+    
+    // Gọi trực tiếp hàm parseRawText vừa được nâng cấp (đồng bộ và cực nhanh)
+    const parsedResult = FileParserService.parseRawText(rawTextImport, 'Dán trực tiếp', 'text');
+    const parsedQuestions = FileParserService.convertToQuestions(parsedResult.items);
+
+    if (parsedQuestions.length > 0) {
+      const reIndexed = parsedQuestions.map((p, i) => ({
         ...p,
         order: questions.length + i + 1
       }));
+      
       setQuestions([...questions, ...reIndexed]);
       setShowRawImportModal(false);
       setRawTextImport('');
+      
       const missingCount = reIndexed.filter(q => isQuestionMissingImage(q)).length;
       if (missingCount > 0) {
         setImportSuccessAlert(`Đã nhập thành công ${reIndexed.length} câu hỏi! ⚠️ Phát hiện ${missingCount} câu nhắc đến hình vẽ cần dán ảnh.`);
