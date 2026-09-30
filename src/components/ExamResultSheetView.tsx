@@ -4,13 +4,9 @@ import {
   CheckCircle2, 
   XCircle, 
   Clock, 
-  Award, 
   BookOpen, 
-  FileText, 
   ShieldCheck, 
   ArrowLeft,
-  Sparkles,
-  Share2,
   Check,
   X
 } from 'lucide-react';
@@ -32,7 +28,7 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
   onBackToDetailedView,
   onRetake
 }) => {
-  // Use shuffled questions snapshot if present, otherwise fallback to assignment questions
+  // Lấy danh sách câu hỏi đã xáo trộn (chính xác với những gì học sinh đã làm)
   const questionPool: Question[] = submission.shuffledQuestions && submission.shuffledQuestions.length > 0
     ? submission.shuffledQuestions
     : assignment.questions;
@@ -114,7 +110,7 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
       {/* OFFICIAL RESULT SHEET DOCUMENT (PRINT-FRIENDLY A4 CARD) */}
       <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-lg border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 text-slate-900">
         
-        {/* FORMAL HEADER (QUỐC HIỆU / TIÊU NGỮ / TÊN TRƯỜNG) */}
+        {/* FORMAL HEADER */}
         <div className="border-b-2 border-indigo-900/20 pb-6 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -129,7 +125,6 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
               </p>
             </div>
 
-            {/* School / System Stamp Badge */}
             <div className="text-right sm:text-right shrink-0">
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -168,7 +163,6 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
 
         {/* SCORE HIGHLIGHT BANNER */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {/* Main Score Box */}
           <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-5 rounded-2xl border-2 border-indigo-200 text-center flex flex-col justify-center items-center">
             <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">
               Điểm Tổng Kết
@@ -184,7 +178,6 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
             </span>
           </div>
 
-          {/* Stat Details */}
           <div className="sm:col-span-2 grid grid-cols-3 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-center">
             <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-col justify-center">
               <div className="flex items-center justify-center space-x-1 text-emerald-600 text-xs font-bold mb-1">
@@ -240,8 +233,8 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                 <tr className="bg-slate-100 text-slate-700 font-black border-b border-slate-200">
                   <th className="py-2.5 px-3 w-12 text-center">Câu</th>
                   <th className="py-2.5 px-3 min-w-[200px]">Nội dung câu hỏi tóm tắt</th>
-                  <th className="py-2.5 px-3 w-28 text-center">Bạn chọn</th>
-                  <th className="py-2.5 px-3 w-28 text-center">Đáp án đúng</th>
+                  <th className="py-2.5 px-3 w-40 text-center">Bạn chọn</th>
+                  <th className="py-2.5 px-3 w-40 text-center">Đáp án đúng</th>
                   <th className="py-2.5 px-3 w-24 text-center">Điểm đạt</th>
                   <th className="py-2.5 px-3 w-24 text-center">Kết quả</th>
                 </tr>
@@ -253,36 +246,38 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                   const isCorrect = ans.isCorrect;
                   const isUnanswered = !ans.selectedAnswer && !ans.studentSolutionText && (!ans.essayImages || ans.essayImages.length === 0);
 
-                  // Extract student chosen option text if available
-                  const studentOption = question?.options?.find(o => 
-                    o.id === ans.selectedAnswer || (o as any).originalId === ans.selectedAnswer
-                  );
-                  const studentText = ans.selectedOptionText || studentOption?.text;
+                  // Extract student chosen option text (giải quyết triệt để lỗi đảo đáp án)
+                  let studentText = ans.selectedOptionText;
+                  if (!studentText && question?.options) {
+                    const matchedOpt = question.options.find(o => o.id === ans.selectedAnswer);
+                    if (matchedOpt) studentText = matchedOpt.text;
+                  }
 
                   // Extract correct option text
-                  const correctOption = question?.options?.find(o => 
-                    o.id === question.correctAnswer || (o as any).originalId === question.correctAnswer
-                  );
-                  const correctText = correctOption?.text;
+                  let correctText = '';
+                  if (question?.options) {
+                    const matchedCorrect = question.options.find(o => o.id === question.correctAnswer);
+                    if (matchedCorrect) correctText = matchedCorrect.text;
+                  }
 
                   return (
                     <tr 
                       key={ans.questionId || idx}
                       className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}
                     >
-                      {/* Question Order */}
+                      {/* Câu */}
                       <td className="py-2.5 px-3 text-center font-black text-slate-800">
                         {question?.order || (idx + 1)}
                       </td>
 
-                      {/* Question Snippet */}
+                      {/* Nội dung câu hỏi */}
                       <td className="py-2.5 px-3 text-slate-700 max-w-xs">
                         <div className="line-clamp-2">
                           {question ? <MathDisplay text={question.question} /> : `Câu ${idx + 1}`}
                         </div>
                       </td>
 
-                      {/* Student Choice */}
+                      {/* Bạn chọn */}
                       <td className="py-2.5 px-3 text-center">
                         {isEssay ? (
                           <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-800">
@@ -293,22 +288,20 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                         ) : (
                           <div className="inline-flex flex-col items-center">
                             <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-black text-xs ${
-                              isCorrect 
-                                ? 'bg-emerald-600 text-white shadow-xs' 
-                                : 'bg-rose-600 text-white shadow-xs'
+                              isCorrect ? 'bg-emerald-600 text-white shadow-xs' : 'bg-rose-600 text-white shadow-xs'
                             }`}>
                               {ans.selectedAnswer}
                             </span>
                             {studentText && (
-                              <span className="text-[10px] text-slate-500 max-w-[90px] truncate mt-0.5">
-                                {studentText}
-                              </span>
+                              <div className="text-[10px] text-slate-600 max-w-[120px] mt-1 font-semibold break-words">
+                                <MathDisplay text={studentText} inline={true} />
+                              </div>
                             )}
                           </div>
                         )}
                       </td>
 
-                      {/* Correct Choice */}
+                      {/* Đáp án đúng */}
                       <td className="py-2.5 px-3 text-center">
                         {isEssay ? (
                           <span className="text-slate-500 text-[11px] font-bold">Theo biểu điểm</span>
@@ -318,20 +311,20 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                               {question?.correctAnswer || '--'}
                             </span>
                             {correctText && (
-                              <span className="text-[10px] text-emerald-700 max-w-[90px] truncate mt-0.5">
-                                {correctText}
-                              </span>
+                              <div className="text-[10px] text-emerald-700 max-w-[120px] mt-1 font-semibold break-words">
+                                <MathDisplay text={correctText} inline={true} />
+                              </div>
                             )}
                           </div>
                         )}
                       </td>
 
-                      {/* Points Earned */}
+                      {/* Điểm đạt */}
                       <td className="py-2.5 px-3 text-center font-bold text-slate-800">
                         +{ans.pointsEarned} / {ans.maxPoints} đ
                       </td>
 
-                      {/* Status Tag */}
+                      {/* Kết quả */}
                       <td className="py-2.5 px-3 text-center">
                         {isCorrect ? (
                           <span className="inline-flex items-center gap-0.5 text-emerald-700 font-bold text-[11px]">
@@ -353,7 +346,7 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
           </div>
         </div>
 
-        {/* TEACHER EVALUATION & PARENT SIGNATURE BOX (A4 STANDARD) */}
+        {/* TEACHER EVALUATION & PARENT SIGNATURE BOX */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t-2 border-slate-200 pt-6 mt-6 text-xs">
           <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
             <span className="font-black text-slate-700 uppercase tracking-wider block mb-1">
