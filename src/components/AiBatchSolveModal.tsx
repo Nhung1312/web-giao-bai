@@ -4,6 +4,7 @@ import { aiService } from '../services/aiService';
 import { StorageService } from '../services/storageService';
 import { FirestoreService } from '../services/firestoreService';
 import { soundEffects } from '../utils/soundEffects';
+import { isEssayQuestion } from '../utils/questionUtils';
 import confetti from 'canvas-confetti';
 import { 
   Sparkles, 
@@ -143,6 +144,7 @@ export const AiBatchSolveModal: React.FC<AiBatchSolveModalProps> = ({
 
         const updatedQuestions: Question[] = questions.map((q) => {
           const found = solvedResults.find(r => r.questionId === q.id);
+          const isEssay = isEssayQuestion(q);
           if (found) {
             const isNeedReview = found.confidence === 'needs_review' || (found.pass1Answer && found.pass2Answer && found.pass1Answer !== found.pass2Answer);
             if (isNeedReview) {
@@ -153,13 +155,15 @@ export const AiBatchSolveModal: React.FC<AiBatchSolveModalProps> = ({
 
             return {
               ...q,
+              type: isEssay ? 'essay' : (q.type || 'multiple_choice'),
               correctAnswer: found.correctAnswer,
               explanation: found.explanation || q.explanation,
+              rubric: found.rubric || q.rubric || '',
               verificationStatus: isNeedReview ? 'needs_review' : 'verified',
               sanityCheckNote: found.sanityCheckNote,
               confidence: found.confidence,
-              pass1Answer: found.pass1Answer,
-              pass2Answer: found.pass2Answer
+              pass1Answer: isEssay ? undefined : (found.pass1Answer || q.pass1Answer),
+              pass2Answer: isEssay ? undefined : (found.pass2Answer || q.pass2Answer)
             };
           }
           return q;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Question, Assignment, ExamTemplate } from '../types';
 import { aiService } from '../services/aiService';
 import { MathDisplay } from './MathDisplay';
+import { isEssayQuestion } from '../utils/questionUtils';
 import { 
   Sparkles, 
   CheckCircle2, 
@@ -16,18 +17,19 @@ import {
   ChevronUp, 
   Check, 
   Copy, 
-  ShieldCheck,
-  RefreshCw,
-  FileText,
-  RotateCcw,
-  CheckCheck,
-  Flag,
-  Key
+  ShieldCheck, 
+  RefreshCw, 
+  FileText, 
+  RotateCcw, 
+  CheckCheck, 
+  Flag, 
+  Key 
 } from 'lucide-react';
 
 export interface SolvedQuestionInfo {
   correctAnswer: string;
   explanation: string;
+  rubric?: string;
   confidence?: 'high' | 'medium' | 'needs_review';
   pass1Answer?: string;
   pass2Answer?: string;
@@ -76,12 +78,14 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
       const initialSuspectMap: Record<string, boolean> = {};
 
       questions.forEach((q) => {
-        initialMap[q.id] = (q.correctAnswer || 'A').toUpperCase();
-        if (q.verificationStatus || q.sanityCheckNote || q.confidence) {
+        const isEssay = isEssayQuestion(q);
+        initialMap[q.id] = isEssay ? (q.correctAnswer || '') : (q.correctAnswer || 'A').toUpperCase();
+        if (q.verificationStatus || q.sanityCheckNote || q.confidence || q.rubric) {
           const isReview = q.confidence === 'needs_review' || q.verificationStatus === 'needs_review';
           initialSolvedMap[q.id] = {
-            correctAnswer: q.correctAnswer || 'A',
+            correctAnswer: q.correctAnswer || (isEssay ? '' : 'A'),
             explanation: q.explanation || '',
+            rubric: q.rubric || '',
             confidence: isReview ? 'needs_review' : 'high',
             pass1Answer: q.pass1Answer || q.correctAnswer,
             pass2Answer: q.pass2Answer || q.correctAnswer,
@@ -143,6 +147,7 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
         newSolvedMap[res.questionId] = {
           correctAnswer: res.correctAnswer,
           explanation: res.explanation,
+          rubric: res.rubric,
           confidence: res.confidence || 'high',
           pass1Answer: res.pass1Answer,
           pass2Answer: res.pass2Answer,
@@ -185,6 +190,7 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
         [q.id]: {
           correctAnswer: res.correctAnswer,
           explanation: res.explanation,
+          rubric: res.rubric || q.rubric,
           confidence: res.confidence || 'high',
           pass1Answer: res.pass1Answer,
           pass2Answer: res.pass2Answer,
@@ -262,7 +268,10 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
     setIsSaving(true);
     try {
       const updatedQuestions: Question[] = questions.map((q) => {
-        const chosenAnswer = userSelectedMap[q.id] || q.correctAnswer || 'A';
+        const isEssay = isEssayQuestion(q);
+        const chosenAnswer = isEssay
+          ? (userSelectedMap[q.id] !== undefined ? userSelectedMap[q.id] : (q.correctAnswer || ''))
+          : (userSelectedMap[q.id] || q.correctAnswer || 'A');
         const aiInfo = solvedMap[q.id];
         const isNeedReview = aiInfo 
           ? (aiInfo.confidence === 'needs_review' || (aiInfo.pass1Answer && aiInfo.pass2Answer && aiInfo.pass1Answer !== aiInfo.pass2Answer))
@@ -270,13 +279,15 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
 
         return {
           ...q,
+          type: isEssay ? 'essay' : (q.type || 'multiple_choice'),
           correctAnswer: chosenAnswer,
           explanation: aiInfo?.explanation || q.explanation || '',
+          rubric: aiInfo?.rubric || q.rubric || '',
           verificationStatus: isNeedReview ? 'needs_review' : (aiInfo ? 'verified' : q.verificationStatus),
           sanityCheckNote: aiInfo?.sanityCheckNote || q.sanityCheckNote,
           confidence: aiInfo?.confidence || q.confidence,
-          pass1Answer: aiInfo?.pass1Answer || q.pass1Answer,
-          pass2Answer: aiInfo?.pass2Answer || q.pass2Answer
+          pass1Answer: isEssay ? undefined : (aiInfo?.pass1Answer || q.pass1Answer),
+          pass2Answer: isEssay ? undefined : (aiInfo?.pass2Answer || q.pass2Answer)
         };
       });
 
@@ -601,11 +612,12 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
             </div>
           ) : (
             filteredQuestions.map((q) => {
-              const currentOriginal = q.correctAnswer || 'A';
+              const isEssay = isEssayQuestion(q);
+              const currentOriginal = q.correctAnswer || (isEssay ? '' : 'A');
               const aiSol = solvedMap[q.id];
-              const selectedAnswer = userSelectedMap[q.id] || currentOriginal;
+              const selectedAnswer = userSelectedMap[q.id] !== undefined ? userSelectedMap[q.id] : currentOriginal;
               const isAiProvided = !!aiSol;
-              const isDiff = selectedAnswer !== currentOriginal;
+              const isDiff = selectedAnswer !== currentOriginal && (!isEssay || selectedAnswer.trim() !== '');
               const isExpanded = expandedExplanations[q.id];
               const isReverifying = reverifyingId === q.id;
 
@@ -621,6 +633,8 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
                       ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/80 shadow-xs'
                       : isDiff
                       ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800'
+                      : isEssay
+                      ? 'bg-purple-50/30 dark:bg-purple-950/10 border-purple-200/80 dark:border-purple-800/50'
                       : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700'
                   }`}
                 >
@@ -633,12 +647,12 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
                           <span className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-black text-xs flex items-center justify-center shrink-0">
                             {q.order}
                           </span>
-                          <span className="text-xs font-bold text-slate-500">
-                            {q.type === 'multiple_choice' ? 'Trắc nghiệm (4 phương án)' : 'Câu hỏi tự luận/ngắn'}
+                          <span className={`text-xs font-bold ${isEssay ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/80 px-2 py-0.5 rounded-md' : 'text-slate-500'}`}>
+                            {isEssay ? 'Câu hỏi tự luận' : 'Trắc nghiệm (4 phương án)'}
                           </span>
                           {isDiff && (
                             <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 text-[10px] font-bold">
-                              Đã đổi từ {currentOriginal} ➜ {selectedAnswer}
+                              {isEssay ? `Đáp số: ${selectedAnswer}` : `Đã đổi từ ${currentOriginal} ➜ ${selectedAnswer}`}
                             </span>
                           )}
                         </div>
@@ -726,9 +740,11 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
                         <div className="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 text-xs text-emerald-900 dark:text-emerald-200 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 text-[11px]">
                             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span className="font-bold">Đã thẩm định kép:</span>
+                            <span className="font-bold">Đã thẩm định:</span>
                             <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
-                              Trùng khớp 100% (Lượt 1: {aiSol.pass1Answer || aiSol.correctAnswer} - Lượt 2: {aiSol.pass2Answer || aiSol.correctAnswer})
+                              {isEssay
+                                ? 'Đã giải chi tiết & xây dựng Rubric chấm chuẩn'
+                                : `Trùng khớp 100% (Lượt 1: ${aiSol.pass1Answer || aiSol.correctAnswer} - Lượt 2: ${aiSol.pass2Answer || aiSol.correctAnswer})`}
                             </span>
                           </div>
                           {aiSol.sanityCheckNote && (
@@ -739,8 +755,21 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
                         </div>
                       )}
 
-                      {/* Options preview */}
-                      {q.options && q.options.length > 0 && (
+                      {/* Rubric display for Essay Questions */}
+                      {isEssay && (aiSol?.rubric || q.rubric) && (
+                        <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs">
+                          <div className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5 mb-1">
+                            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Hướng dẫn chấm & Thang điểm (Rubric):</span>
+                          </div>
+                          <div className="whitespace-pre-line text-purple-900 dark:text-purple-200 text-[11px] leading-relaxed font-sans bg-white/80 dark:bg-slate-900/60 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                            {aiSol?.rubric || q.rubric}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Options preview (Chỉ hiển thị cho câu trắc nghiệm) */}
+                      {!isEssay && q.options && q.options.length > 0 && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
                           {q.options.map((opt) => {
                             const isChosen = selectedAnswer === opt.id;
@@ -781,30 +810,59 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
                     </div>
 
                     {/* Right: Answer Selector & AI status */}
-                    <div className="sm:w-56 shrink-0 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-                          Đáp án áp dụng:
-                        </span>
-                        
-                        {/* A B C D Radio selector buttons */}
-                        <div className="grid grid-cols-4 gap-1">
-                          {['A', 'B', 'C', 'D'].map((letter) => (
+                    <div className="sm:w-60 shrink-0 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
+                      {isEssay ? (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase font-bold text-purple-700 dark:text-purple-300">
+                              Đáp số / Kết luận:
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-bold">
+                              Tự luận
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            value={selectedAnswer}
+                            onChange={(e) => setUserSelectedMap(prev => ({ ...prev, [q.id]: e.target.value }))}
+                            placeholder="VD: x = 2; y = 5..."
+                            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-purple-300 dark:border-purple-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                          />
+                          {aiSol?.correctAnswer && aiSol.correctAnswer !== selectedAnswer && (
                             <button
-                              key={letter}
                               type="button"
-                              onClick={() => setUserSelectedMap(prev => ({ ...prev, [q.id]: letter }))}
-                              className={`py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                                selectedAnswer === letter
-                                  ? 'bg-indigo-600 text-white shadow-xs scale-105'
-                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
-                              }`}
+                              onClick={() => setUserSelectedMap(prev => ({ ...prev, [q.id]: aiSol.correctAnswer }))}
+                              className="text-[10px] text-purple-700 dark:text-purple-300 hover:underline flex items-center gap-1 cursor-pointer font-semibold text-left"
                             >
-                              {letter}
+                              <span>Dùng đáp số AI: <strong className="text-purple-900 dark:text-purple-100">{aiSol.correctAnswer}</strong></span>
                             </button>
-                          ))}
+                          )}
                         </div>
-                      </div>
+                      ) : (
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                            Đáp án áp dụng:
+                          </span>
+                          
+                          {/* A B C D Radio selector buttons */}
+                          <div className="grid grid-cols-4 gap-1">
+                            {['A', 'B', 'C', 'D'].map((letter) => (
+                              <button
+                                key={letter}
+                                type="button"
+                                onClick={() => setUserSelectedMap(prev => ({ ...prev, [q.id]: letter }))}
+                                className={`py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                                  selectedAnswer === letter
+                                    ? 'bg-indigo-600 text-white shadow-xs scale-105'
+                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                {letter}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Re-verify Single Question Button */}
                       <button
@@ -815,12 +873,16 @@ export const AiSolveExamModal: React.FC<AiSolveExamModalProps> = ({
                         {isReverifying ? (
                           <>
                             <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />
-                            <span>Đang đối soát...</span>
+                            <span>Đang giải...</span>
                           </>
                         ) : (
                           <>
                             <RefreshCw className="w-3 h-3 text-violet-600" />
-                            <span>{isAiProvided ? 'Thẩm định lại câu này' : 'AI giải & đối soát câu này'}</span>
+                            <span>
+                              {isEssay
+                                ? (isAiProvided ? 'AI giải & lập lại biểu điểm' : 'AI giải & lập biểu điểm')
+                                : (isAiProvided ? 'Thẩm định lại câu này' : 'AI giải & đối soát câu này')}
+                            </span>
                           </>
                         )}
                       </button>

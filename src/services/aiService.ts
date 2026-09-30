@@ -11,6 +11,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { Question, QuestionAnalysis, Submission, EssayGradingResult } from '../types';
+import { isEssayQuestion } from '../utils/questionUtils';
 
 export interface GenerateQuestionsParams {
   grade: '6' | '7' | '8' | '9';
@@ -103,6 +104,7 @@ export interface IAIService {
     order: number;
     correctAnswer: string;
     explanation: string;
+    rubric?: string;
     confidence?: 'high' | 'medium' | 'needs_review';
     pass1Answer?: string;
     pass2Answer?: string;
@@ -119,6 +121,7 @@ export interface IAIService {
   }): Promise<{
     correctAnswer: string;
     explanation: string;
+    rubric?: string;
     confidence?: 'high' | 'medium' | 'needs_review';
     pass1Answer?: string;
     pass2Answer?: string;
@@ -1000,6 +1003,7 @@ Trả về JSON duy nhất:
     order: number;
     correctAnswer: string;
     explanation: string;
+    rubric?: string;
     confidence?: 'high' | 'medium' | 'needs_review';
     pass1Answer?: string;
     pass2Answer?: string;
@@ -1018,24 +1022,26 @@ Trả về JSON duy nhất:
       order: number;
       correctAnswer: string;
       explanation: string;
+      rubric?: string;
       confidence?: 'high' | 'medium' | 'needs_review';
       pass1Answer?: string;
       pass2Answer?: string;
       sanityCheckNote?: string;
     }> = [];
 
-    // Chỉ giải các câu trắc nghiệm hoặc có các phương án
-    const mcqQuestions = questions.filter(q => q.type === 'multiple_choice' || (q.options && q.options.length >= 2));
+    // Tách riêng các câu trắc nghiệm (có phương án A, B, C, D) và các câu tự luận
+    const mcqQuestions = questions.filter(q => !isEssayQuestion(q) && (q.type === 'multiple_choice' || (q.options && q.options.length >= 2)));
+    const essayQuestions = questions.filter(q => isEssayQuestion(q) || (!mcqQuestions.includes(q)));
 
     const ai = new GoogleGenAI({ apiKey });
     let model = this.getModel();
-    const BATCH_SIZE = 4; // Tách từng đợt 4 câu để Gemini tính toán chuyên sâu, không bị vượt giới hạn token
+    const totalQuestionsCount = questions.length;
+    let completedCount = 0;
 
-    for (let i = 0; i < mcqQuestions.length; i += BATCH_SIZE) {
-      const batch = mcqQuestions.slice(i, i + BATCH_SIZE);
-      if (onProgress) {
-        onProgress(Math.min(i + batch.length, mcqQuestions.length), mcqQuestions.length);
-      }
+    // 1. GIẢI CÁC CÂU HỎI TRẮC NGHIỆM (QUY TRÌNH THẨM ĐỊNH KÉP)
+    const BATCH_SIZE_MCQ = 4;
+    for (let i = 0; i < mcqQuestions.length; i += BATCH_SIZE_MCQ) {
+      const batch = mcqQuestions.slice(i, i + BATCH_SIZE_MCQ);
 
       try {
         const prompt = `
@@ -1124,11 +1130,10 @@ Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\
           }
         }
       } catch (batchErr) {
-        console.warn('Lỗi khi AI giải đợt câu hỏi:', batchErr);
+        console.warn('Lỗi khi AI giải đợt câu trắc nghiệm:', batchErr);
       }
 
-      // Đối với các câu trong batch chưa có trong results (do JSON parse hỏng hoặc lỗi mạng):
-      // Thử giải đơn lẻ từng câu để đảm bảo không bị thiếu hoặc default sai
+      // Đối với các câu trắc nghiệm trong batch chưa có trong results: thử giải đơn lẻ
       for (const q of batch) {
         if (!results.some(r => r.questionId === q.id)) {
           try {
@@ -1157,16 +1162,135 @@ Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\
           }
         }
       }
+
+      completedCount += batch.length;
+      if (onProgress) {
+        onProgress(completedCount, totalQuestionsCount);
+      }
     }
 
-    // Đảm bảo tất cả các câu (kể cả câu tự luận) đều có kết quả
+    // 2. GIẢI CÁC CÂU HỎI TỰ LUẬN (GIẢI CHI TIẾT + LẬP BIỂU ĐIỂM RUBRIC)
+    const BATCH_SIZE_ESSAY = 3;
+    for (let i = 0; i < essayQuestions.length; i += BATCH_SIZE_ESSAY) {
+      const batch = essayQuestions.slice(i, i + BATCH_SIZE_ESSAY);
+
+      try {
+        const prompt = `
+Bạn là Giám khảo & Chuyên gia giải đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, SGK Kết nối tri thức).
+Nhiệm vụ: Giải chi tiết từng bước và xây dựng HƯỚNG DẪN CHẤM / BIỂU ĐIỂM (RUBRIC) cho các câu hỏi TỰ LUẬN sau đây.
+
+YÊU CẦU CHO TỪNG CÂU TỰ LUẬN:
+1. "correctAnswer": Tóm tắt ngắn gọn Đáp số hoặc Kết luận cốt lõi của bài toán (Ví dụ: "x = 2; x = -1" hoặc "A = 3/(√x - 1)" hoặc "Tứ giác ABCD nội tiếp do hai góc đối bù nhau"). TUYỆT ĐỐI KHÔNG ghi 'A', 'B', 'C', 'D'.
+2. "explanation": Lời giải mẫu chi tiết, chuẩn mực sư phạm, đầy đủ từng bước lập luận, biến đổi đại số / hình học từ giả thiết đến kết luận.
+3. "rubric": Hướng dẫn chấm / Thang điểm chi tiết từng bước (theo cấu trúc biểu điểm thi THCS) để giáo viên và AI có thể chấm điểm học sinh chính xác.
+   (Ví dụ: "- Nêu đúng ĐKXĐ: +0.25đ\n- Quy đồng và rút gọn đúng tử số: +0.5đ\n- Rút gọn ra kết quả cuối cùng: +0.25đ")
+4. "confidence": "high" nếu bài giải đã được kiểm tra lại đầy đủ điều kiện và phép tính; hoặc "needs_review" nếu đề bài có dữ kiện đặc biệt hoặc nhiều trường hợp cần đối soát.
+5. "sanityCheckNote": 1 câu ngắn gọn đối chiếu (Ví dụ: "Đã thử lại nghiệm vào phương trình gốc, thỏa mãn ĐKXĐ 100%").
+
+THÔNG TIN ĐỀ THI:
+- Khối lớp: Toán ${grade} | Chủ đề: ${topic}
+
+DANH SÁCH CÂU HỎI TỰ LUẬN CẦN GIẢI:
+${batch.map((q, idx) => `
+[Mã: ${q.id}] (Câu ${q.order || i + idx + 1})
+Đề bài: ${q.question}
+${q.rubric ? `Ghi chú rubric ban đầu của giáo viên: ${q.rubric}` : ''}
+`).join('\n---\n')}
+
+Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\`json):
+[
+  {
+    "questionId": "${batch[0]?.id || 'q_id'}",
+    "order": ${batch[0]?.order || i + 1},
+    "correctAnswer": "Đáp số hoặc kết luận cốt lõi của bài toán",
+    "explanation": "Lời giải chi tiết từng bước, chuẩn mực sư phạm...",
+    "rubric": "- Bước 1: ... (+0.25đ)\n- Bước 2: ... (+0.5đ)\n- Bước 3: Kết luận (+0.25đ)",
+    "confidence": "high",
+    "sanityCheckNote": "Đã kiểm tra lại kết quả và điều kiện xác định."
+  }
+]
+`;
+        const { response, modelUsed } = await this.generateWithFailover(ai, model, [{ text: prompt }], { temperature: 0.1 });
+        if (modelUsed !== model) {
+          model = modelUsed;
+          this.setModel(modelUsed);
+        }
+
+        const text = response.text || '';
+        const cleanJson = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+        const jsonMatch = cleanJson.match(/\[[\s\S]*\]/);
+
+        if (jsonMatch) {
+          const parsedList = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsedList)) {
+            parsedList.forEach((item: any, pIdx: number) => {
+              const targetQ = batch.find(bq => bq.id === item.questionId)
+                || batch.find(bq => String(bq.order) === String(item.order))
+                || (typeof item.order === 'number' && item.order >= 1 && item.order <= batch.length ? batch[item.order - 1] : undefined)
+                || batch[pIdx];
+
+              if (!targetQ) return;
+
+              results.push({
+                questionId: targetQ.id,
+                order: targetQ.order,
+                correctAnswer: item.correctAnswer || targetQ.correctAnswer || 'Xem lời giải chi tiết',
+                explanation: item.explanation || 'Đã giải chi tiết câu tự luận bằng AI Toán THCS.',
+                rubric: item.rubric || targetQ.rubric || '',
+                confidence: item.confidence === 'needs_review' ? 'needs_review' : 'high',
+                sanityCheckNote: item.sanityCheckNote || 'Đã đối soát kết quả và biểu điểm bài giải.'
+              });
+            });
+          }
+        }
+      } catch (essayBatchErr) {
+        console.warn('Lỗi khi AI giải đợt câu tự luận:', essayBatchErr);
+      }
+
+      // Đối với các câu tự luận trong batch chưa có trong results: giải đơn lẻ
+      for (const q of batch) {
+        if (!results.some(r => r.questionId === q.id)) {
+          try {
+            const singleRes = await this.solveSingleQuestion({ question: q, grade, topic });
+            results.push({
+              questionId: q.id,
+              order: q.order,
+              correctAnswer: singleRes.correctAnswer,
+              explanation: singleRes.explanation,
+              rubric: singleRes.rubric || q.rubric,
+              confidence: singleRes.confidence || 'high',
+              sanityCheckNote: singleRes.sanityCheckNote
+            });
+          } catch (singleErr) {
+            results.push({
+              questionId: q.id,
+              order: q.order,
+              correctAnswer: q.correctAnswer || 'Xem lời giải chi tiết',
+              explanation: q.explanation || 'Chưa thể tự động giải câu này, Thầy/Cô vui lòng nhập đáp án.',
+              rubric: q.rubric || '',
+              confidence: 'needs_review',
+              sanityCheckNote: 'AI chưa thể giải câu này trong đợt quét. Cần Thầy/Cô kiểm tra.'
+            });
+          }
+        }
+      }
+
+      completedCount += batch.length;
+      if (onProgress) {
+        onProgress(completedCount, totalQuestionsCount);
+      }
+    }
+
+    // Đảm bảo tất cả các câu đều có kết quả
     questions.forEach((q) => {
       if (!results.some(r => r.questionId === q.id)) {
+        const isEssay = isEssayQuestion(q);
         results.push({
           questionId: q.id,
           order: q.order,
-          correctAnswer: q.correctAnswer || 'A',
-          explanation: q.explanation || 'Câu hỏi tự luận hoặc câu trả lời ngắn.',
+          correctAnswer: isEssay ? (q.correctAnswer || 'Xem lời giải chi tiết') : (q.correctAnswer || 'A'),
+          explanation: q.explanation || (isEssay ? 'Câu hỏi tự luận yêu cầu giải chi tiết theo các bước.' : 'Chưa thể tự động giải câu này, Thầy/Cô vui lòng nhập đáp án.'),
+          rubric: q.rubric || '',
           confidence: 'high'
         });
       }
@@ -1186,6 +1310,7 @@ Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\
   }): Promise<{
     correctAnswer: string;
     explanation: string;
+    rubric?: string;
     confidence?: 'high' | 'medium' | 'needs_review';
     pass1Answer?: string;
     pass2Answer?: string;
@@ -1193,7 +1318,67 @@ Trả về DUY NHẤT một mảng JSON thuần túy (không kèm markdown \`\`\
   }> {
     const { question, grade = '7', topic = 'Toán THCS' } = params;
     const apiKey = this.getApiKey();
+    const isEssay = isEssayQuestion(question);
 
+    // 1. CÂU HỎI TỰ LUẬN
+    if (isEssay) {
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          let model = this.getModel();
+          const prompt = `
+Bạn là Giám khảo & Chuyên gia giải đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, SGK Kết nối tri thức).
+Nhiệm vụ: Giải chi tiết từng bước và xây dựng HƯỚNG DẪN CHẤM / BIỂU ĐIỂM (RUBRIC) cho câu hỏi TỰ LUẬN sau.
+
+THÔNG TIN ĐỀ THI:
+- Khối lớp: Toán ${grade} | Chủ đề: ${topic}
+- Đề bài: ${question.question}
+${question.rubric ? `- Ghi chú rubric hiện tại: ${question.rubric}` : ''}
+
+YÊU CẦU:
+1. "correctAnswer": Tóm tắt ngắn gọn Đáp số hoặc Kết luận cốt lõi của bài toán (Ví dụ: "x = 2; x = -1" hoặc "Biểu thức A = 3/(√x - 1)" hoặc "Tứ giác ABCD nội tiếp"). TUYỆT ĐỐI KHÔNG ghi 'A', 'B', 'C' hay 'D'.
+2. "explanation": Lời giải mẫu chi tiết, chuẩn mực sư phạm, biến đổi đại số/hình học từng bước rõ ràng từ giả thiết đến kết luận.
+3. "rubric": Biểu điểm chấm chi tiết từng bước (0.25đ / 0.5đ) theo chuẩn chấm thi THCS.
+4. "confidence": "high" hoặc "needs_review".
+5. "sanityCheckNote": 1 câu ngắn gọn đối soát (Ví dụ: "Đã kiểm tra lại điều kiện xác định và phép biến đổi, chính xác.").
+
+Trả về DUY NHẤT một JSON thuần túy (không kèm markdown \`\`\`json):
+{
+  "correctAnswer": "Đáp số hoặc kết luận cốt lõi của bài toán",
+  "explanation": "Lời giải chi tiết từng bước...",
+  "rubric": "- Bước 1... (+0.25đ)\n- Bước 2... (+0.5đ)\n- Bước 3: Kết luận (+0.25đ)",
+  "confidence": "high",
+  "sanityCheckNote": "Đã kiểm tra và đối soát kết quả."
+}
+`;
+          const { response } = await this.generateWithFailover(ai, model, [{ text: prompt }], { temperature: 0.1 });
+          const text = (response.text || '').replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            return {
+              correctAnswer: parsed.correctAnswer || question.correctAnswer || 'Xem lời giải chi tiết',
+              explanation: parsed.explanation || 'Đã giải chi tiết bằng AI Toán THCS.',
+              rubric: parsed.rubric || question.rubric || '',
+              confidence: parsed.confidence === 'needs_review' ? 'needs_review' : 'high',
+              sanityCheckNote: parsed.sanityCheckNote || 'Đã đối soát kết quả và biểu điểm bài giải.'
+            };
+          }
+        } catch (err) {
+          console.warn('Lỗi khi AI giải câu tự luận:', err);
+        }
+      }
+
+      return {
+        correctAnswer: question.correctAnswer || 'Xem lời giải chi tiết',
+        explanation: question.explanation || 'Bài toán tự luận yêu cầu giải theo các bước chuẩn mực trong SGK.',
+        rubric: question.rubric || '',
+        confidence: 'needs_review',
+        sanityCheckNote: 'Chưa thể kết nối Gemini API để giải câu tự luận này.'
+      };
+    }
+
+    // 2. CÂU HỎI TRẮC NGHIỆM (QUY TRÌNH THẨM ĐỊNH KÉP)
     if (apiKey) {
       try {
         const ai = new GoogleGenAI({ apiKey });
@@ -1350,6 +1535,15 @@ TRẢ VỀ DUY NHẤT MẢNG JSON (không kèm markdown):
    * Bộ quy tắc suy luận thông minh khi ngoại tuyến
    */
   private fallbackSolveSingleQuestion(q: Question): { questionId: string; order: number; correctAnswer: string; explanation: string } {
+    if (isEssayQuestion(q)) {
+      return {
+        questionId: q.id,
+        order: q.order,
+        correctAnswer: q.correctAnswer || 'Xem lời giải chi tiết',
+        explanation: q.explanation || 'Bài toán tự luận yêu cầu học sinh trình bày các bước suy luận, lập luận chặt chẽ và kết luận theo thang điểm.'
+      };
+    }
+
     const qText = (q.question || '').toLowerCase();
     const opts = q.options || [];
     let detectedAns = q.correctAnswer || 'A';
