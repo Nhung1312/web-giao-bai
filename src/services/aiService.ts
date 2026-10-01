@@ -47,6 +47,27 @@ export interface GradeEssayParams {
   topicHint?: string;
 }
 
+export interface MediaInput {
+  base64Data: string;
+  mimeType: string;
+  fileName?: string;
+}
+
+export interface ExtractQuestionsFromMediaParams {
+  media: MediaInput[];
+  fileName?: string;
+  grade?: string;
+  onProgress?: (status: string) => void;
+  apiKey?: string;
+}
+
+export interface MediaExtractResult {
+  examTitle?: string;
+  grade?: string;
+  questions: Question[];
+  rawSummary?: string;
+}
+
 export interface IAIService {
   getApiKey(): string | null;
   setApiKey(key: string): void;
@@ -148,6 +169,11 @@ export interface IAIService {
     topic?: string;
     onProgress?: (current: number, total: number) => void;
   }): Promise<Question[]>;
+
+  /**
+   * AI Bóc tách câu hỏi & công thức Toán từ file PDF hoặc Hình ảnh (ảnh dán / upload) bằng Gemini Vision
+   */
+  extractQuestionsFromMedia(params: ExtractQuestionsFromMediaParams): Promise<MediaExtractResult>;
 }
 
 const STORAGE_KEYS = {
@@ -157,7 +183,7 @@ const STORAGE_KEYS = {
 };
 
 export class HybridAIService implements IAIService {
-  private defaultModel = 'gemini-3.8-flash';
+  private defaultModel = 'gemini-3.1-flash-lite';
 
   getApiKey(): string | null {
     try {
@@ -202,10 +228,10 @@ export class HybridAIService implements IAIService {
       const stored = localStorage.getItem(STORAGE_KEYS.GEMINI_MODEL);
       if (stored && stored.trim()) {
         const val = stored.trim();
-        // Tự động nâng cấp các model đã bị Google deprecated (2.5, 1.5, 2.0) lên gemini-3.8-flash
+        // Tự động nâng cấp các model đã bị Google deprecated (2.5, 1.5, 2.0) lên gemini-3.1-flash-lite
         if (val.includes('2.5') || val.includes('1.5') || val.includes('2.0') || val === 'gemini-pro') {
-          this.setModel('gemini-3.8-flash');
-          return 'gemini-3.8-flash';
+          this.setModel('gemini-3.1-flash-lite');
+          return 'gemini-3.1-flash-lite';
         }
         return val;
       }
@@ -1828,6 +1854,186 @@ ${(q.options || []).map(o => `  ${o.id}. ${o.text}`).join('\n')}
 
     results.sort((a, b) => a.order - b.order);
     return results;
+  }
+
+  /**
+   * AI Bóc tách toàn bộ câu hỏi & công thức Toán từ file PDF hoặc Hình ảnh (ảnh dán / upload)
+   * Sử dụng Gemini Vision Multimodal kết hợp chuẩn hóa LaTeX KaTeX
+   */
+  async extractQuestionsFromMedia(params: ExtractQuestionsFromMediaParams): Promise<MediaExtractResult> {
+    const { media, fileName, grade, onProgress, apiKey: customKey } = params;
+    const apiKey = customKey?.trim() || this.getApiKey();
+
+    if (!apiKey) {
+      throw new Error('Chưa cấu hình Gemini API Key. Bạn vui lòng nhập API Key để kích hoạt AI bóc tách đề thi PDF & hình ảnh.');
+    }
+
+    if (!media || media.length === 0) {
+      throw new Error('Vui lòng chọn hoặc dán ít nhất 1 file PDF hoặc hình ảnh đề thi.');
+    }
+
+    if (onProgress) onProgress('Đang tải dữ liệu và khởi tạo kết nối Gemini AI Vision...');
+
+    const ai = new GoogleGenAI({ apiKey });
+    const model = this.getModel();
+
+    const isPdf = media.some(m => m.mimeType === 'application/pdf');
+
+    const promptText = `
+Bạn là Chuyên gia Khảo thí và Số hóa Đề thi môn Toán THCS Việt Nam (Chương trình GDPT mới, bám sát các bộ SGK: Kết nối tri thức với cuộc sống, Chân trời sáng tạo, Cánh diều).
+Nhiệm vụ của bạn: Đọc toàn bộ nội dung từ tài liệu đính kèm (${isPdf ? 'File đề thi PDF' : 'Ảnh chụp / ảnh dán đề thi'}), bóc tách TOÀN BỘ các câu hỏi kiểm tra toán học và trả về cấu trúc dữ liệu JSON chuẩn.
+
+QUY TẮC BÓC TÁCH CỰC KỲ QUAN TRỌNG:
+1. ĐẦY ĐỦ CÂU HỎI: Bóc tách không bỏ sót bất kỳ câu hỏi nào trong đề (từ Câu 1 đến câu cuối cùng).
+2. CHUẨN HÓA CÔNG THỨC TOÁN HỌC (LATEX):
+   - Mọi biểu thức toán, phân số, căn thức, phương trình, số mũ, góc, vector, hệ phương trình BẮT BUỘC phải đặt trong cặp dấu đô la: $công_thức$.
+   - Ví dụ: $\\frac{x - 1}{x + 2}$, $\\sqrt{2x + 1}$, $x^2 - 4x + 4 = 0$, $\\widehat{ABC} = 60^\\circ$, $\\vec{AB}$, $\\begin{cases} x + y = 3 \\\\ 2x - y = 1 \\end{cases}$.
+   - Giữ nguyên các ký tự toán học chính xác từng ký tự, không viết tắt, không làm tròn.
+3. PHÂN LOẠI CÂU HỎI:
+   - "multiple_choice": Các câu trắc nghiệm nhiều lựa chọn (thường có A, B, C, D).
+     + Tách riêng từng phương án vào mảng options: [{ id: "A", text: "..." }, { id: "B", text: "..." }, ...].
+     + Nhận diện phương án đúng (correctAnswer): Nếu đề có khoanh tròn, đánh dấu, gạch chân hoặc có bảng đáp án cuối trang thì lấy theo đề; nếu đề bài chưa có đáp án, bạn hãy TỰ GIẢI TOÁN ĐỂ CHỌN ĐÁP ÁN ĐÚNG CHÍNH XÁC (A, B, C hoặc D).
+     + Viết lời giải tóm tắt ngắn gọn vào explanation.
+   - "essay": Các câu tự luận (chứng minh hình học, rút gọn biểu thức, giải bài toán bằng cách lập hệ phương trình, bài toán thực tế).
+     + Ghi rõ đề bài kèm điều kiện, hình vẽ (nêu rõ giả thiết).
+     + Viết tóm tắt các bước giải hoặc biểu điểm gợi ý vào rubric hoặc explanation.
+4. ĐIỂM SỐ (points):
+   - Nếu đề có ghi điểm (ví dụ: "(0,5 điểm)", "(1,0 điểm)"), hãy lấy đúng số điểm đó.
+   - Nếu không ghi: Mặc định trắc nghiệm là 0.25 hoặc 0.5 điểm, tự luận là 1.0 đến 2.0 điểm.
+5. SỐ THỨ TỰ (order): Đánh số thứ tự từ 1, 2, 3... liên tục.
+
+YÊU CẦU ĐỊNH DẠNG ĐẦU RA:
+Chỉ trả về DUY NHẤT một chuỗi JSON hợp lệ theo định dạng sau (không kèm lời chào hay văn bản ngoài JSON):
+{
+  "examTitle": "Tiêu đề đề thi (ví dụ: Đề khảo sát chất lượng môn Toán 8 - Học kì 1)",
+  "grade": "${grade || '8'}",
+  "questions": [
+    {
+      "order": 1,
+      "question": "Nội dung câu hỏi với công thức toán $...$",
+      "type": "multiple_choice",
+      "options": [
+        { "id": "A", "text": "Nội dung phương án A kèm công thức $...$" },
+        { "id": "B", "text": "Nội dung phương án B kèm công thức $...$" },
+        { "id": "C", "text": "Nội dung phương án C kèm công thức $...$" },
+        { "id": "D", "text": "Nội dung phương án D kèm công thức $...$" }
+      ],
+      "correctAnswer": "A",
+      "points": 0.5,
+      "explanation": "Lời giải ngắn gọn...",
+      "rubric": ""
+    }
+  ]
+}
+`;
+
+    if (onProgress) onProgress('Đang gửi dữ liệu sang Gemini AI để trích xuất câu hỏi & công thức...');
+
+    const contentsParts: any[] = [];
+    for (const item of media) {
+      const cleanBase64 = item.base64Data.includes('base64,')
+        ? item.base64Data.split('base64,')[1]
+        : item.base64Data;
+
+      contentsParts.push({
+        inlineData: {
+          mimeType: item.mimeType,
+          data: cleanBase64
+        }
+      });
+    }
+
+    contentsParts.push({ text: promptText });
+
+    const { response, modelUsed } = await this.generateWithFailover(
+      ai,
+      model,
+      contentsParts,
+      {
+        responseMimeType: 'application/json'
+      }
+    );
+
+    if (onProgress) onProgress('Đang phân tích cấu trúc câu hỏi và chuẩn hóa công thức...');
+
+    const rawText = response.text || '';
+    let parsedJson: any = null;
+
+    try {
+      const cleaned = rawText
+        .replace(/```(?:json)?/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      parsedJson = JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.error('Không thể parse JSON từ Gemini:', rawText, parseErr);
+      const arrayMatch = rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (arrayMatch) {
+        try {
+          parsedJson = { questions: JSON.parse(arrayMatch[0]) };
+        } catch {}
+      }
+      if (!parsedJson) {
+        throw new Error('AI không thể cấu trúc hóa dữ liệu đề thi từ tài liệu này. Vui lòng kiểm tra lại độ nét của ảnh hoặc nội dung file PDF.');
+      }
+    }
+
+    const rawQuestions: any[] = Array.isArray(parsedJson)
+      ? parsedJson
+      : Array.isArray(parsedJson?.questions)
+        ? parsedJson.questions
+        : Array.isArray(parsedJson?.data)
+          ? parsedJson.data
+          : [];
+
+    if (rawQuestions.length === 0) {
+      throw new Error('Không phát hiện thấy câu hỏi nào trong file PDF/ảnh. Hãy đảm bảo tài liệu chứa đề thi môn Toán.');
+    }
+
+    const questions: Question[] = rawQuestions.map((q: any, idx: number) => {
+      const qOrder = Number(q.order) || (idx + 1);
+      const isEssay = q.type === 'essay' || (!q.options || q.options.length < 2);
+      
+      let options: { id: string; text: string }[] = [];
+      if (!isEssay && Array.isArray(q.options)) {
+        options = q.options.map((opt: any, oIdx: number) => {
+          if (typeof opt === 'string') {
+            const letter = String.fromCharCode(65 + oIdx);
+            return { id: letter, text: opt };
+          }
+          return {
+            id: String(opt.id || String.fromCharCode(65 + oIdx)).toUpperCase(),
+            text: String(opt.text || '')
+          };
+        });
+      }
+
+      let correct = 'A';
+      if (!isEssay) {
+        correct = this.extractValidAnswerLetter(q.correctAnswer, options);
+      }
+
+      return {
+        id: `ai_media_${Date.now()}_${qOrder}_${Math.random().toString(36).substring(2, 6)}`,
+        order: qOrder,
+        question: String(q.question || `Câu hỏi ${qOrder}`).trim(),
+        type: isEssay ? 'essay' : 'multiple_choice',
+        options: isEssay ? [] : options,
+        correctAnswer: isEssay ? '' : correct,
+        points: Number(q.points) || (isEssay ? 1.0 : 0.5),
+        explanation: q.explanation ? String(q.explanation).trim() : '',
+        rubric: q.rubric ? String(q.rubric).trim() : ''
+      };
+    });
+
+    questions.sort((a, b) => a.order - b.order);
+
+    return {
+      examTitle: parsedJson?.examTitle || fileName || 'Đề thi trích xuất từ AI',
+      grade: parsedJson?.grade || grade || '8',
+      questions,
+      rawSummary: `Đã bóc tách thành công ${questions.length} câu hỏi (${questions.filter(q => q.type === 'multiple_choice').length} trắc nghiệm, ${questions.filter(q => q.type === 'essay').length} tự luận) từ mô hình ${modelUsed}.`
+    };
   }
 }
 

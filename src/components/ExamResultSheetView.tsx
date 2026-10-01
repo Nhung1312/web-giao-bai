@@ -70,6 +70,24 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* CSS In ấn khổ A4 chuẩn cho Phiếu Báo Điểm */}
+      <style type="text/css" media="print">
+        {`
+          @page { size: A4 portrait; margin: 10mm 12mm; }
+          .katex-mathml { display: none !important; }
+          #result-sheet-print { 
+            position: absolute !important; 
+            left: 0 !important; 
+            top: 0 !important; 
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            border: none !important; 
+            box-shadow: none !important;
+          }
+        `}
+      </style>
+
       {/* Top Action Bar (Hidden when printing) */}
       <div className="print:hidden flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center space-x-2">
@@ -108,7 +126,7 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
       </div>
 
       {/* OFFICIAL RESULT SHEET DOCUMENT (PRINT-FRIENDLY A4 CARD) */}
-      <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-lg border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 text-slate-900">
+      <div id="result-sheet-print" className="bg-white rounded-3xl p-6 sm:p-10 shadow-lg border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 text-slate-900">
         
         {/* FORMAL HEADER */}
         <div className="border-b-2 border-indigo-900/20 pb-6 mb-6">
@@ -271,8 +289,8 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                       </td>
 
                       {/* Nội dung câu hỏi */}
-                      <td className="py-2.5 px-3 text-slate-700 max-w-xs">
-                        <div className="line-clamp-2">
+                      <td className="py-2.5 px-3 text-slate-700 max-w-sm print:max-w-none">
+                        <div className="leading-relaxed break-words text-xs">
                           {question ? <MathDisplay text={question.question} /> : `Câu ${idx + 1}`}
                         </div>
                       </td>
@@ -293,7 +311,7 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                               {ans.selectedAnswer}
                             </span>
                             {studentText && (
-                              <div className="text-[10px] text-slate-600 max-w-[120px] mt-1 font-semibold break-words">
+                              <div className="text-[11px] text-slate-700 max-w-[150px] print:max-w-none mt-1 font-semibold break-words">
                                 <MathDisplay text={studentText} inline={true} />
                               </div>
                             )}
@@ -311,7 +329,7 @@ export const ExamResultSheetView: React.FC<ExamResultSheetViewProps> = ({
                               {question?.correctAnswer || '--'}
                             </span>
                             {correctText && (
-                              <div className="text-[10px] text-emerald-700 max-w-[120px] mt-1 font-semibold break-words">
+                              <div className="text-[11px] text-emerald-800 max-w-[150px] print:max-w-none mt-1 font-semibold break-words">
                                 <MathDisplay text={correctText} inline={true} />
                               </div>
                             )}

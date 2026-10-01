@@ -77,7 +77,7 @@
 
 /* Print specific styles to always print in crisp black and white paper format */
 @media print {
-  body, html, * {
+  body, html {
     background: transparent !important;
     color: #000000 !important;
   }
@@ -85,8 +85,26 @@
     background: transparent !important;
     color: #000000 !important;
   }
-  .dark .katex {
+  .katex, .dark .katex {
     color: #000000 !important;
+  }
+  /* Đảm bảo nét kẻ phân số, dấu căn bậc hai và vạch kẻ trên KaTeX luôn in rõ nét không bị mất nét */
+  .katex .frac-line {
+    border-bottom: 1.2px solid #000000 !important;
+  }
+  .katex .overline .overline-line {
+    border-top: 1.2px solid #000000 !important;
+  }
+  .katex .sqrt > .sqrt-line {
+    border-top: 1.2px solid #000000 !important;
+  }
+  .katex svg {
+    fill: #000000 !important;
+    stroke: #000000 !important;
+  }
+  /* Suppress hidden MathML text to prevent duplicate printed characters */
+  .katex-mathml {
+    display: none !important;
   }
 }
 

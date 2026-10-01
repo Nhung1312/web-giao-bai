@@ -32,6 +32,7 @@ import {
   FileBadge,
   AlertTriangle,
   Image as ImageIcon,
+  Camera,
   Filter
 } from 'lucide-react';
 
@@ -143,12 +144,35 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
   });
 
   const [showFileUploadModal, setShowFileUploadModal] = useState(false);
+  const [fileUploadInitialTab, setFileUploadInitialTab] = useState<'pdf' | 'image' | 'file'>('pdf');
   const [showAiGenModal, setShowAiGenModal] = useState(false);
   const [showRawImportModal, setShowRawImportModal] = useState(false);
   const [rawTextImport, setRawTextImport] = useState('');
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiGenCount, setAiGenCount] = useState(5);
   const [importSuccessAlert, setImportSuccessAlert] = useState<string | null>(null);
+
+  // Lắng nghe phím Ctrl+V ảnh chụp đề thi trên trang để tự động mở bộ bóc tách ảnh AI
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        return;
+      }
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          setFileUploadInitialTab('image');
+          setShowFileUploadModal(true);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, []);
 
   // MỚI: State AI Giải Đề & Nhập nhanh đáp án
   const [showAiSolveModal, setShowAiSolveModal] = useState(false);
@@ -867,11 +891,41 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
 
                 <button
                   type="button"
-                  onClick={() => setShowFileUploadModal(true)}
-                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+                  onClick={() => {
+                    setFileUploadInitialTab('pdf');
+                    setShowFileUploadModal(true);
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+                  title="Tách toàn bộ câu hỏi và công thức toán từ file PDF bằng AI Gemini"
                 >
-                  <UploadCloud className="w-4 h-4" />
-                  <span>Tải lên file</span>
+                  <FileText className="w-4 h-4 text-rose-300" />
+                  <span>Tách đề PDF (AI)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFileUploadInitialTab('image');
+                    setShowFileUploadModal(true);
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+                  title="Dán trực tiếp ảnh chụp đề bài từ clipboard (Ctrl+V) hoặc tải ảnh chụp"
+                >
+                  <Camera className="w-4 h-4 text-purple-200" />
+                  <span>Dán ảnh đề (Ctrl+V)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFileUploadInitialTab('file');
+                    setShowFileUploadModal(true);
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  title="Nhập từ file Word (.docx), Excel (.xlsx) hoặc JSON"
+                >
+                  <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Word / Excel</span>
                 </button>
 
                 <button
@@ -1699,11 +1753,13 @@ export const TeacherCreateAssignment: React.FC<TeacherCreateAssignmentProps> = (
         </div>
       )}
 
-      {/* Modal: File Upload (Excel, Word, PDF bóc tách) */}
+      {/* Modal: File Upload (Excel, Word, PDF bóc tách AI & Dán ảnh) */}
       <FileUploadModal
         isOpen={showFileUploadModal}
         onClose={() => setShowFileUploadModal(false)}
         onImportQuestions={handleImportQuestionsFromFile}
+        initialTab={fileUploadInitialTab}
+        defaultGrade={grade}
       />
 
       {/* Modal: AI Giải Đề & Tạo Bảng Đáp Án Chuẩn */}

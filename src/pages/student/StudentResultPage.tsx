@@ -163,7 +163,7 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
         
         {/* BANNER THÔNG BÁO CHỜ GIÁO VIÊN CHẤM TỰ LUẬN NẾU CÓ */}
         {hasPendingTeacherGrading && (
-          <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 dark:from-purple-950/40 dark:via-indigo-950/40 dark:to-amber-950/30 border-2 border-purple-200 dark:border-purple-800 rounded-3xl p-5 shadow-xs flex items-start gap-4">
+          <div className="print:hidden bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 dark:from-purple-950/40 dark:via-indigo-950/40 dark:to-amber-950/30 border-2 border-purple-200 dark:border-purple-800 rounded-3xl p-5 shadow-xs flex items-start gap-4">
             <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 flex items-center justify-center shrink-0">
               <Clock className="w-6 h-6 animate-pulse" />
             </div>
@@ -179,7 +179,7 @@ export const StudentResultPage: React.FC<StudentResultPageProps> = ({
         )}
 
         {/* HERO SCORE SUMMARY CARD */}
-        <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80 text-center relative overflow-hidden">
+        <div className={`${resultViewMode === 'sheet' ? 'print:hidden' : ''} bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80 text-center relative overflow-hidden`}>
           <div className={`absolute top-0 left-0 right-0 h-3 bg-gradient-to-r ${ratingColor}`} />
 
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-indigo-50 text-indigo-600 font-black mb-4 shadow-inner border border-indigo-100">

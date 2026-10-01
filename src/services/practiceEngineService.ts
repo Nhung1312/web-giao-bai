@@ -154,13 +154,17 @@ export class PracticeEngineService {
       let isRelevantExam = false;
 
       if (scope === 'topic') {
-        // Tìm theo chuyên đề
-        isRelevantExam = searchKeywords.some(kw => asgTitle.includes(kw) || asgTopic.includes(kw)) || true;
+        // Tìm theo chuyên đề: đề thi phải liên quan đến chuyên đề hoặc chứa câu hỏi thuộc chuyên đề
+        isRelevantExam = searchKeywords.some(kw => asgTitle.includes(kw) || asgTopic.includes(kw));
       } else if (isGK1) {
         isRelevantExam = asgTitle.includes('giữa kì 1') || asgTitle.includes('giữa kỳ 1') || asgTitle.includes('gk1') ||
                          searchKeywords.some(kw => asgTitle.includes(kw) || asgTopic.includes(kw));
       } else if (isHK1) {
-        isRelevantExam = asgTitle.includes('kì 1') || asgTitle.includes('kỳ 1') || asgTitle.includes('hk1') || true;
+        isRelevantExam = asgTitle.includes('kì 1') || asgTitle.includes('kỳ 1') || asgTitle.includes('hk1');
+      } else if (isGK2) {
+        isRelevantExam = asgTitle.includes('giữa kì 2') || asgTitle.includes('giữa kỳ 2') || asgTitle.includes('gk2');
+      } else if (isHK2) {
+        isRelevantExam = asgTitle.includes('kì 2') || asgTitle.includes('kỳ 2') || asgTitle.includes('hk2');
       } else {
         isRelevantExam = true;
       }
@@ -270,33 +274,32 @@ export class PracticeEngineService {
         );
       }
 
-      if (aiService.hasApiKey()) {
-        try {
-          const aiGenerated = await aiService.generateQuestions({
-            grade,
-            topic,
-            count: missingCount,
-            difficulty
-          });
+      // Gọi AI Service để biên soạn câu hỏi (sử dụng Gemini AI nếu có key, hoặc Smart Engine chuẩn SGK nếu chưa có key)
+      try {
+        const aiGenerated = await aiService.generateQuestions({
+          grade,
+          topic,
+          count: missingCount,
+          difficulty
+        });
 
-          if (aiGenerated && aiGenerated.length > 0) {
-            aiGenerated.forEach((aiQ, idx) => {
-              finalQuestions.push({
-                ...aiQ,
-                id: `q_prac_ai_${Date.now()}_${idx + 1}`,
-                order: finalQuestions.length + 1,
-                topicHint: topic
-              });
+        if (aiGenerated && aiGenerated.length > 0) {
+          aiGenerated.forEach((aiQ, idx) => {
+            finalQuestions.push({
+              ...aiQ,
+              id: `q_prac_ai_${Date.now()}_${idx + 1}`,
+              order: finalQuestions.length + 1,
+              topicHint: topic
             });
-            aiCount = aiGenerated.length;
-          }
-        } catch (aiErr) {
-          console.warn('[PracticeEngine] AI không thể bù đắp lúc này, dùng cơ chế hoán vị nhân bản:', aiErr);
+          });
+          aiCount = aiGenerated.length;
         }
+      } catch (aiErr) {
+        console.warn('[PracticeEngine] AI không thể bù đắp lúc này, dùng cơ chế hoán vị nhân bản:', aiErr);
       }
 
-      // Nếu AI bị lỗi hoặc chưa có API key và vẫn thiếu câu:
-      // Nhân bản thêm từ kho sẵn có với hoán vị số liệu để đủ đúng targetCount
+      // Nếu vẫn còn thiếu câu và trong kho đề có câu hỏi đúng chuyên đề:
+      // Nhân bản thêm từ kho sẵn có với hoán vị phương án để đủ đúng targetCount
       if (finalQuestions.length < targetCount && teacherPool.length > 0) {
         let loopIdx = 0;
         while (finalQuestions.length < targetCount) {

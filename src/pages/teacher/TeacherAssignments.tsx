@@ -269,8 +269,8 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({
             onClick={() => setShowFileUploadModal(true)}
             className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-xs text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
           >
-            <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>Tải lên file (Excel/Word/PDF)</span>
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>Tách đề PDF / Dán ảnh AI</span>
           </button>
           <button
             onClick={() => onNavigate('create')}

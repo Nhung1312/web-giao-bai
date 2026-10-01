@@ -406,7 +406,7 @@ export const ExamReviewSheetModal: React.FC<ExamReviewSheetModalProps> = ({
                               }`}>
                                 {opt.id}
                               </span>
-                              <span className="truncate flex-1">
+                              <span className="break-words flex-1 text-xs">
                                 <MathDisplay text={opt.text} />
                               </span>
                               {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
